@@ -18,6 +18,14 @@ import pytest
 from seed.generate import generate_world
 
 
+@pytest.fixture(autouse=True)
+def metrics_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Send agent metrics to a temp file so test runs never land in logs/."""
+    path = tmp_path / "agent_metrics.jsonl"
+    monkeypatch.setenv("CARTWHEEL_METRICS_LOG", str(path))
+    return path
+
+
 @pytest.fixture(scope="session")
 def world(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     root = tmp_path_factory.mktemp("world")

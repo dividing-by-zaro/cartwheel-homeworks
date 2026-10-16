@@ -64,12 +64,12 @@ or credential changes, and anything outside Cartwheel.
 ## Tool guidance
 - Prefer a tool lookup over memory. Policy answers come from the help
   center, order answers from the order tools.
-- You MUST explain your reasoning in plain text before every tool call.
-  State what you are about to look up and why, in one sentence. Do not
-  call a tool without explaining first.
 - Cite the policy id (for example cw-returns) for every policy claim.
 - Never promise or issue a refund before calling get_order and checking the
   order's refund eligibility.
+- Before issuing a refund, call get_refund_status for that order. If a refund
+  is already queued or approved, do not issue another one; tell the user the
+  existing refund's status instead.
 
 ## Escalation
 When you are unsure, or an action is above your authority (for example a
@@ -114,6 +114,34 @@ LITELLM_COURSE_MODELS = {
     "glm-5.2": "together_ai/zai-org/GLM-5.2",
 }
 
+# Frontier models for side-by-side comparisons. Each runs on its provider's
+# own API when that key is set, otherwise through OpenRouter with
+# OPENROUTER_API_KEY. name -> (direct id, direct key, OpenRouter id).
+# Any other OpenRouter model works too: pass its id with an "openrouter/"
+# prefix, e.g. --model openrouter/openai/gpt-4o-mini.
+FRONTIER_MODELS = {
+    "gpt-6-astra": ("gpt-6-astra", "OPENAI_API_KEY", "openrouter/openai/gpt-6-astra"),
+    "claude-opus-5-5": ("anthropic/claude-opus-5-5", "ANTHROPIC_API_KEY", "openrouter/anthropic/claude-opus-5.5"),
+    "claude-haiku-5-5": ("anthropic/claude-haiku-5-5", "ANTHROPIC_API_KEY", "openrouter/anthropic/claude-haiku-5.5"),
+    "gemini-4-argon": ("gemini/gemini-4-argon", "GEMINI_API_KEY", "openrouter/google/gemini-4-argon"),
+}
+
+
+def model_route(name: str) -> str:
+    """The provider model id a course model name runs on, e.g. "openai/gpt-4o-mini"."""
+    import os
+
+    if name in FRONTIER_MODELS:
+        direct, key, openrouter = FRONTIER_MODELS[name]
+        if os.environ.get(key):
+            return direct if "/" in direct else f"openai/{direct}"
+        if os.environ.get("OPENROUTER_API_KEY"):
+            return openrouter
+        raise ValueError(f"{name} needs {key} or OPENROUTER_API_KEY in .env")
+    if name.startswith("gpt-"):
+        return f"openai/{name}"
+    return LITELLM_COURSE_MODELS.get(name, name)
+
 
 def resolve_model(name: str | None) -> Any:
     """Turn a course model name into what Agent(model=...) expects.
@@ -121,17 +149,18 @@ def resolve_model(name: str | None) -> Any:
     OpenAI models pass through as plain strings. Everything else goes through
     LiteLLM (claude-haiku-4-5 and claude-opus-4-6 via the Anthropic API with
     ANTHROPIC_API_KEY, glm-5.2 via Together AI with TOGETHER_API_KEY). Same
-    agent code, three providers; only this function changes.
+    agent code, three providers; only this function changes. FRONTIER_MODELS
+    pick their provider (direct or OpenRouter) in model_route.
     """
     import os
 
     name = name or os.environ.get("CARTWHEEL_MODEL") or DEFAULT_MODEL
-    if name.startswith("gpt-"):
-        return name
-    litellm_id = LITELLM_COURSE_MODELS.get(name, name)
+    route = model_route(name)
+    if route.startswith("openai/"):
+        return route.removeprefix("openai/")
     from agents.extensions.models.litellm_model import LitellmModel
 
-    return LitellmModel(model=litellm_id)
+    return LitellmModel(model=route)
 
 
 def model_settings_for(model: Any) -> ModelSettings:
@@ -153,6 +182,10 @@ def model_settings_for(model: Any) -> ModelSettings:
         # Older OpenAI chat models reject the reasoning and verbosity settings.
         return ModelSettings(include_usage=True)
     model_id = getattr(model, "model", "") if not isinstance(model, str) else ""
+    if model_id.startswith("openrouter/"):
+        # Provider defaults. OpenRouter normalizes requests across providers,
+        # and provider-specific reasoning settings may not pass through it.
+        return ModelSettings(include_usage=True)
     if model_id.startswith("together_ai/"):
         return ModelSettings(extra_args={"allowed_openai_params": ["tools"]})
     if "claude" in model_id or "anthropic" in model_id:
@@ -427,6 +460,20 @@ def find_order(
     return _call(wrapper, hw_tools.find_order, query)
 
 
+@function_tool
+def get_refund_status(
+    wrapper: RunContextWrapper[AuthContext], order_id: int
+) -> dict[str, Any]:
+    """Check the refunds on one order: whether each is approved or still waiting for human review, and what happens next."""
+    return _call(wrapper, hw_tools.get_refund_status, order_id)
+
+
+@function_tool
+def audit_my_products(wrapper: RunContextWrapper[AuthContext]) -> dict[str, Any]:
+    """Merchants only: check your store's product listings for missing titles, zero or negative prices, and duplicate titles."""
+    return _call(wrapper, hw_tools.audit_my_products)
+
+
 # Progressive disclosure: a session exposes only the tools its role can use.
 # Fewer tools mean fewer wrong choices and cleaner evals. At dev scale the
 # only difference is that support staff, who have no orders of their own,
@@ -436,13 +483,14 @@ _COMMON_TOOLS = [
     get_policy,
     search_products,
     get_order,
+    get_refund_status,
     issue_refund,
     cancel_order,
     escalate_to_human,
 ]
 TOOLS_BY_ROLE = {
     "shopper": _COMMON_TOOLS + [list_my_orders, find_order],
-    "merchant": _COMMON_TOOLS + [list_my_orders, find_order],
+    "merchant": _COMMON_TOOLS + [list_my_orders, find_order, audit_my_products],
     "support": _COMMON_TOOLS + [find_order],
 }
 

@@ -8,6 +8,11 @@ Usage:
     uv run python -m agent.cli --role merchant --model claude-haiku-4-5
     uv run python -m agent.cli --role support --user 9502 --trace
     uv run python -m agent.cli --role support --defenses   # Module 4 guards + refund pause
+    uv run python -m agent.cli --role shopper --variant sql  # two-tool SQL agent
+
+Every turn is logged to logs/agent_metrics.jsonl (latency, tool failures,
+tokens, cost) for both variants. Compare them with:
+    uv run python -m scripts.compare_agents
 
 Tracing is off by default. ``--trace`` uses the course's Langfuse setup;
 ``--trace-openai`` opts into OpenAI hosted tracing (requires OPENAI_API_KEY
@@ -30,6 +35,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import time
 
 try:  # readline transparently upgrades input(): arrow keys, ctrl-a/e/k/w,
@@ -42,10 +48,12 @@ from agents.items import RunItem
 from opentelemetry import trace
 
 from agent import db
-from agent.agent import build_agent, prompt_version
+from agent.agent import DEFAULT_MODEL, build_agent, model_route, prompt_version
 from agent.auth import AuthContext
 from agent.config import REPO_ROOT
+from agent.sql_agent import build_sql_agent, sql_prompt_version
 from observability.instrument import load_env, setup_openai_tracing, setup_tracing
+from observability.metrics import format_turn, run_with_metrics
 
 DEFAULT_USERS = {"shopper": 1, "merchant": 9001, "support": 9501}
 MAX_TURNS = 12  # cap runaway loops; keeps conversations bounded
@@ -102,19 +110,26 @@ async def chat(
     defenses: bool = False,
     debug: bool = False,
     tracing: bool = False,
+    variant: str = "tools",
 ) -> None:
-    agent = build_agent(ctx, model=model, defenses=defenses)
+    if variant == "sql":
+        agent = build_sql_agent(ctx, model=model)
+        version = sql_prompt_version()
+    else:
+        agent = build_agent(ctx, model=model, defenses=defenses)
+        version = prompt_version()
+    model_name = model or os.environ.get("CARTWHEEL_MODEL") or DEFAULT_MODEL
     # main() enables callbacks for Langfuse or explicit OpenAI tracing.
     run_config = RunConfig(tracing_disabled=not tracing)
-    session = SQLiteSession(
-        f"cli-{ctx.role}-{ctx.user_id}-{int(time.time())}", str(SESSIONS_DB)
-    )
-    version = prompt_version()
+    session_id = f"cli-{variant}-{ctx.role}-{ctx.user_id}-{int(time.time())}"
+    session = SQLiteSession(session_id, str(SESSIONS_DB))
     print(
-        f"Cartwheel support CLI | role={ctx.role} user={ctx.user_id} "
-        f"store={ctx.store_id} prompt_version={version} defenses={'on' if defenses else 'off'}"
+        f"Cartwheel support CLI | variant={variant} model={model_name} role={ctx.role} "
+        f"user={ctx.user_id} store={ctx.store_id} prompt_version={version} "
+        f"defenses={'on' if defenses else 'off'}"
     )
     print("Type a message, or 'quit' to exit.\n")
+    turn_index = 0
     while True:
         try:
             line = input(f"{ctx.role}> ").strip()
@@ -130,14 +145,21 @@ async def chat(
                 span.set_attribute("cartwheel.user_role", ctx.role)
                 span.set_attribute("cartwheel.user_id", str(ctx.user_id))
                 span.set_attribute("cartwheel.prompt_version", version)
-            result = await Runner.run(
+            result, turn = await run_with_metrics(
                 agent,
                 line,
-                session=session,
                 context=ctx,
+                variant=variant,
+                model=model_name,
+                session_id=session_id,
+                turn_index=turn_index,
+                prompt_version=version,
+                defenses=defenses,
+                session=session,
                 max_turns=MAX_TURNS,
                 run_config=run_config,
             )
+        turn_index += 1
 
         # ------------------------------------------------------------------
         # Module 4 pause and resume code (Homework 8, Part D). With defenses on,
@@ -176,7 +198,7 @@ async def chat(
 
         if debug:
             _print_tool_calls(result.new_items)
-        print(f"\nagent> {result.final_output}\n")
+        print(f"\nagent> {result.final_output}\n  {format_turn(turn)}\n")
 
 
 def main() -> None:
@@ -186,7 +208,10 @@ def main() -> None:
     parser.add_argument(
         "--model",
         default=None,
-        help="gpt-4o-mini | claude-haiku-4-5 | glm-5.2 | ... (default: $CARTWHEEL_MODEL or gpt-4o-mini)",
+        help=(
+            "gpt-4o-mini | claude-haiku-4-5 | glm-5.2 | frontier: gpt-6-astra, claude-opus-5-5, "
+            "claude-haiku-5-5, gemini-4-argon | openrouter/<id> (default: $CARTWHEEL_MODEL or gpt-4o-mini)"
+        ),
     )
     tracing_options = parser.add_mutually_exclusive_group()
     tracing_options.add_argument(
@@ -206,9 +231,21 @@ def main() -> None:
         action="store_true",
         help="print each tool call's name, arguments, and result",
     )
+    parser.add_argument(
+        "--variant",
+        choices=["tools", "sql"],
+        default="tools",
+        help="tools: the course agent (default); sql: the two-tool read_sql/write_sql agent",
+    )
     args = parser.parse_args()
+    if args.variant == "sql" and args.defenses:
+        parser.error("--defenses applies only to the tools variant")
 
     load_env()
+    try:
+        model_route(args.model or os.environ.get("CARTWHEEL_MODEL") or DEFAULT_MODEL)
+    except ValueError as exc:
+        parser.error(str(exc))
     tracing = False
     if args.trace:
         tracing = setup_tracing()
@@ -219,7 +256,14 @@ def main() -> None:
             parser.error(str(exc))
     ctx = resolve_auth(args.role, args.user)
     asyncio.run(
-        chat(ctx, args.model, defenses=args.defenses, debug=args.debug, tracing=tracing)
+        chat(
+            ctx,
+            args.model,
+            defenses=args.defenses,
+            debug=args.debug,
+            tracing=tracing,
+            variant=args.variant,
+        )
     )
 
 

@@ -122,3 +122,13 @@ The Module 1 implementation tasks are marked `### YOUR CODE HERE (HW1)` or `### 
 
 > [!IMPORTANT]
 > The Module 1 handouts are in `homework/module-1/`. The [homework index](homework/README.md) lists all released assignments. A [video walkthrough](https://youtu.be/qO98jDayTHo?si=gLN5FZ3FDiAIs_gG) of how to attempt Homework 1 is also available.
+
+## Additions in this fork
+
+Homework 1 deliverables are `agent/tools.py`, `agent/agent.py`, `hw1-session.jsonl`, and `hw1-part-c.md` (the Part C before/after test, rerun with `uv run python -m scripts.check_duplicate_refund`). Beyond the assignment:
+
+- Two extra tools in `agent/tools.py`: `get_refund_status` (all roles) and `audit_my_products` (merchants).
+- A SQL variant of the agent (`agent/sql_agent.py`, `agent/sql_tools.py`) with two tools, `read_sql` and `write_sql`. Reads run on a private, read-only copy of the caller's rows; writes accept three statements that go through the same checked logic as the tool-based agent. Chat with it via `uv run python -m agent.cli --variant sql`.
+- Per-turn metrics for both variants (`observability/metrics.py`): latency, tool failures, tokens, cost, and state changes, logged to `logs/agent_metrics.jsonl`. Compare variants with `uv run python -m scripts.compare_agents`.
+- `scripts/replay_conversations.py` replays recorded or scripted conversations (`scripts/extra_conversations.json`) through every model and variant, each conversation on freshly seeded data.
+- Frontier models for comparisons (`gpt-6-astra`, `claude-opus-5-5`, `claude-haiku-5-5`, `gemini-4-argon`) run on the provider's own key, or through `OPENROUTER_API_KEY` when that key is missing.

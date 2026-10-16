@@ -104,6 +104,20 @@ class Order:
         }
 
 
+@dataclass(frozen=True)
+class Refund:
+    id: int
+    order_id: int
+    amount_cents: int
+    reason: str
+    status: str
+    created_at: date
+
+    @property
+    def amount_usd(self) -> float:
+        return self.amount_cents / 100
+
+
 def _order_from_row(row: sqlite3.Row) -> Order:
     return Order(
         id=row["id"],
@@ -247,6 +261,24 @@ def insert_refund(
     )
     conn.commit()
     return int(cursor.lastrowid)
+
+
+def list_refunds_for_order(conn: sqlite3.Connection, order_id: int) -> list[Refund]:
+    """Every refund record for one order, oldest first."""
+    rows = conn.execute(
+        "SELECT * FROM refunds WHERE order_id = ? ORDER BY created_at, id", (order_id,)
+    ).fetchall()
+    return [
+        Refund(
+            id=row["id"],
+            order_id=row["order_id"],
+            amount_cents=row["amount_cents"],
+            reason=row["reason"],
+            status=row["status"],
+            created_at=date.fromisoformat(row["created_at"]),
+        )
+        for row in rows
+    ]
 
 
 def insert_escalation(
