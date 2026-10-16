@@ -1,0 +1,1616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cartwheel Explorer</title>
+<style>
+:root {
+  --bg: #f7f6f2; --surface: #ffffff; --surface-2: #f0eee8; --text: #1d1c1a; --muted: #6b6860;
+  --border: #dedad0; --accent: #2f6fdf; --accent-soft: #e3ecfb;
+  --read: #2a7d5b; --read-soft: #e1f2ea; --write: #b5532a; --write-soft: #fbe8de;
+  --hw: #7a4fd0; --hw-soft: #eee6fb; --dim: 0.28;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161614; --surface: #201f1c; --surface-2: #2a2925; --text: #ecebe6; --muted: #a29f95;
+    --border: #3a3833; --accent: #7aa7f5; --accent-soft: #1f2c44;
+    --read: #6fcfa3; --read-soft: #1b3229; --write: #f0976c; --write-soft: #3b2419;
+    --hw: #b79af5; --hw-soft: #2d2442;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161614; --surface: #201f1c; --surface-2: #2a2925; --text: #ecebe6; --muted: #a29f95;
+  --border: #3a3833; --accent: #7aa7f5; --accent-soft: #1f2c44;
+  --read: #6fcfa3; --read-soft: #1b3229; --write: #f0976c; --write-soft: #3b2419;
+  --hw: #b79af5; --hw-soft: #2d2442;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+header.top { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--border); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-height: 56px; padding-top: 8px; padding-bottom: 8px; }
+nav.tabs button { white-space: nowrap; }
+.brand { white-space: nowrap; }
+.brand { font-weight: 650; letter-spacing: -0.01em; }
+.brand small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+nav.tabs { display: flex; gap: 4px; margin-left: auto; }
+nav.tabs button { border: 1px solid transparent; background: none; color: var(--muted); font: inherit;
+  padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+nav.tabs button[aria-selected="true"] { background: var(--surface); border-color: var(--border); color: var(--text); }
+main { padding: 24px 0 64px; }
+h2 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+p.lede { color: var(--muted); margin: 0 0 20px; max-width: 760px; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+
+/* ---------- Diagram ---------- */
+.flow { display: grid; grid-template-columns: 1fr 1.05fr 1.5fr 1.15fr; gap: 14px; align-items: start; }
+.col { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; position: relative; }
+.col + .col::before { content: "→"; position: absolute; left: -13px; top: 18px; color: var(--muted); font-size: 16px; }
+.card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 11px; background: var(--surface); margin-bottom: 8px;
+  transition: opacity .15s, border-color .15s, box-shadow .15s; }
+.card:last-child { margin-bottom: 0; }
+.card .t { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.card .d { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.who { display: grid; gap: 8px; }
+.pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
+.pill.read { background: var(--read-soft); color: var(--read); }
+.pill.write { background: var(--write-soft); color: var(--write); }
+.pill.hw { background: var(--hw-soft); color: var(--hw); }
+.pill.given { background: var(--surface-2); color: var(--muted); }
+.tool { cursor: default; }
+.tool .rule { font-size: 12.5px; color: var(--text); margin-top: 4px; }
+.tool .touches { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+.chip { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 5px; background: var(--surface-2); color: var(--muted); }
+.chip.w { background: var(--write-soft); color: var(--write); }
+.tool.hw { border-left: 3px solid var(--hw); }
+.table-card .count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.flow.focus .card.linkable { opacity: var(--dim); }
+.flow.focus .card.linkable.lit { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.guard { background: var(--surface-2); border-style: dashed; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.hint { color: var(--muted); font-size: 13px; }
+
+.walk { margin-top: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.walk-pick { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.walk-pick button { font: inherit; font-size: 13px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 99px; padding: 4px 12px; cursor: pointer; }
+.walk-pick button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+ol.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 8px; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+ol.steps li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); color: var(--muted);
+  font-size: 12px; font-weight: 600; display: grid; place-items: center; margin-top: 1px; }
+ol.steps .who-tag { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+ol.steps .res { font-family: var(--mono); font-size: 12px; background: var(--surface-2); border-radius: 6px; padding: 4px 8px; margin-top: 4px; display: inline-block; max-width: 100%; overflow-x: auto; white-space: pre; }
+.takeaways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 28px; }
+.takeaways div { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; font-size: 14px; }
+.takeaways b { display: block; margin-bottom: 4px; }
+
+@media (max-width: 980px) {
+  .flow { grid-template-columns: 1fr 1fr; }
+  .col + .col::before { display: none; }
+  .takeaways { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .flow { grid-template-columns: 1fr; }
+  .top .wrap { height: auto; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; gap: 8px; }
+  nav.tabs { margin-left: 0; }
+}
+/* ---------- Variant switch + SQL cards ---------- */
+nav.tabs { flex-wrap: wrap; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px; margin: 0 0 14px; background: var(--surface-2); border-radius: 10px; }
+.seg button { font: inherit; font-size: 14px; border: 0; background: none; color: var(--muted); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.seg button span { font-size: 12px; margin-left: 4px; opacity: .8; }
+.seg button[aria-checked="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.card .shapes { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.card .shapes li { font-family: var(--mono); font-size: 11.5px; background: var(--surface-2); border-radius: 6px; padding: 4px 6px; overflow-wrap: anywhere; }
+.card .sub { font-size: 12.5px; margin-top: 4px; display: grid; gap: 3px; }
+.card .sub b { font-weight: 600; }
+
+/* ---------- What the model sees ---------- */
+.delta { background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 10px 12px; margin: 0 0 14px; font-size: 14px; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.compare > * { min-width: 0; }
+.side { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.side-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.side-head b { font-size: 16px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.stats div { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+.stats b { display: block; font-size: 18px; color: var(--text); font-variant-numeric: tabular-nums; }
+.tdef { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.tdef:last-child { margin-bottom: 0; }
+.tdef-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tdef pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12px; margin: 8px 0; }
+.tdef table { font-size: 12.5px; width: 100%; }
+.tdef td { padding: 3px 10px 3px 0; white-space: normal; border: 0; vertical-align: top; }
+.tdef tbody tr { cursor: default; } .tdef tbody tr:hover { background: none; }
+.tdef details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+.tdef details pre { background: var(--surface-2); border-radius: 8px; padding: 8px; }
+pre.prompt { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin: 0; }
+pre.prompt .diff { background: var(--hw-soft); color: var(--hw); display: inline-block; width: 100%; }
+@media (max-width: 860px) { .compare { grid-template-columns: 1fr; } }
+
+/* ---------- Model comparison ---------- */
+:root { --series-1: #2a78d6; --series-2: #eb6834; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --series-1: #3987e5; --series-2: #d95926; } }
+:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; }
+.cmp-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.swatch.tools { background: var(--series-1); } .swatch.sql { background: var(--series-2); }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tile .s { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+:root { --out-blocked: #1baf7a; --out-bad: #4a3aa7; --bar-neutral: #dcdad3; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --out-blocked: #199e70; --out-bad: #9085e9; --bar-neutral: #45433e; } }
+:root[data-theme="dark"] { --out-blocked: #199e70; --out-bad: #9085e9; --bar-neutral: #45433e; }
+.chart.wide { grid-column: 1 / -1; }
+.chart .cmp-legend { font-size: 12px; margin: 0 0 10px; }
+.srow { display: grid; grid-template-columns: 118px 44px 1fr 120px; gap: 8px; align-items: center; padding: 2px 0; }
+.srow .lab { font-size: 12.5px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .slab { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.sgap { height: 6px; }
+.strack { display: flex; gap: 2px; height: 12px; min-width: 0; }
+.strack > div { height: 100%; min-width: 3px; }
+.strack > div:first-child { border-radius: 4px 0 0 4px; }
+.strack > div:last-child { border-radius: 0 4px 4px 0; }
+.strack > div:only-child { border-radius: 4px; }
+.strack:hover { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 4px; }
+.strack.empty { height: auto; font-size: 11.5px; color: var(--muted); }
+.strack.empty:hover { outline: none; }
+.sval { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw-ok { background: var(--bar-neutral); } .sw-blocked { background: var(--out-blocked); } .sw-bad { background: var(--out-bad); }
+.sw-model.tools { background: var(--series-1); } .sw-model.sql { background: var(--series-2); }
+.sw-tool.tools { background: color-mix(in oklab, var(--series-1) 38%, var(--surface)); }
+.sw-tool.sql { background: color-mix(in oklab, var(--series-2) 38%, var(--surface)); }
+@media (max-width: 1100px) { .charts { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .srow { grid-template-columns: 78px 34px 1fr 74px; gap: 6px; } .srow .lab { font-size: 11.5px; } }
+.chart { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; min-width: 0; }
+.chart h4 { margin: 0; font-size: 14px; }
+.chart .sub { font-size: 12px; color: var(--muted); margin: 2px 0 10px; }
+.brow { display: grid; grid-template-columns: 118px 1fr; gap: 10px; align-items: center; padding: 3px 0; }
+.brow .lab { font-size: 12.5px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track { display: grid; gap: 2px; padding: 3px 0; background-image: linear-gradient(to right, var(--border) 1px, transparent 1px); background-size: 25% 100%; }
+.bar { height: 9px; border-radius: 0 4px 4px 0; min-width: 2px; cursor: default; }
+.bar.tools { background: var(--series-1); } .bar.sql { background: var(--series-2); }
+.bar:hover { outline: 2px solid var(--text); outline-offset: 1px; }
+.ticks { display: grid; grid-template-columns: 118px 1fr; gap: 10px; margin-top: 4px; }
+.ticks .tk { position: relative; height: 14px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ticks .tk span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.ticks .tk span:first-child { transform: none; } .ticks .tk span:last-child { transform: translateX(-100%); }
+.tip { position: fixed; z-index: 30; pointer-events: none; background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.14); max-width: 280px; }
+.tip b { display: block; margin-bottom: 2px; }
+.cmp-h3 { margin: 28px 0 4px; }
+.grid-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+table.behave { border-collapse: collapse; font-size: 12px; width: 100%; }
+table.behave th, table.behave td { border-bottom: 1px solid var(--border); padding: 6px 8px; white-space: nowrap; vertical-align: top; text-align: left; position: static; cursor: default; }
+table.behave thead th { font-weight: 600; color: var(--muted); background: var(--surface); }
+table.behave th.grp { text-align: center; border-left: 1px solid var(--border); }
+table.behave td.first { border-left: 1px solid var(--border); }
+table.behave td.q { white-space: normal; min-width: 210px; max-width: 260px; }
+table.behave tbody tr { cursor: default; } table.behave tbody tr:hover { background: none; }
+.cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; cursor: pointer; border-radius: 6px; padding: 2px; }
+.cell:hover { background: var(--surface-2); }
+.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 99px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.tag.act { background: var(--accent-soft); color: var(--accent); }
+.tag.warn { background: var(--write-soft); color: var(--write); }
+.tag.err { background: var(--write); color: var(--surface); }
+.vdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.vdot.tools { background: var(--series-1); } .vdot.sql { background: var(--series-2); }
+.filters-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 12px; }
+.filters-row select { font: inherit; font-size: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
+.chipbtn { font: inherit; font-size: 12.5px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 99px; padding: 3px 10px; cursor: pointer; }
+.chipbtn[aria-pressed="true"] { color: var(--text); border-color: var(--text); }
+.turn-block { margin: 18px 0 22px; }
+.user-msg { display: inline-block; background: var(--accent-soft); border-radius: 12px; padding: 8px 12px; font-size: 14px; margin-bottom: 10px; max-width: 100%; overflow-wrap: anywhere; }
+.user-msg .hint { display: block; font-size: 11px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+.rc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; min-width: 0; font-size: 13.5px; }
+.rc.orig { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.rc.hl { box-shadow: 0 0 0 2px var(--text); }
+.rc-head { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; flex-wrap: wrap; }
+.rc-head .hint { font-weight: 400; }
+.rc-meta { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.rc-body { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 10.5em; overflow: hidden; }
+.rc-body.open { max-height: none; }
+.rc .more { font: inherit; font-size: 12px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; margin-top: 4px; }
+.rc details { margin-top: 6px; font-size: 12px; }
+.rc details summary { cursor: pointer; color: var(--muted); }
+.rc details pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); padding: 6px; border-radius: 6px; font-family: var(--mono); font-size: 11.5px; margin: 4px 0; }
+@media (max-width: 860px) { .charts { grid-template-columns: 1fr; } .chart.wide { grid-column: auto; } .tiles { grid-template-columns: repeat(2, 1fr); } }
+#summary th { cursor: default; }
+
+/* ---------- Headline card (built to screenshot) ---------- */
+:root { --pu-course: #8a7ad8; --pu-sql: #4a3aa7; --pu-tint: #f1eefc; --pu-line: #cfc7f3; --pu-ink: #3b2d8f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pu-course: #6152c6; --pu-sql: #a89cf3; --pu-tint: #241f3d; --pu-line: #463c7c; --pu-ink: #cfc6fb; } }
+:root[data-theme="dark"] { --pu-course: #6152c6; --pu-sql: #a89cf3; --pu-tint: #241f3d; --pu-line: #463c7c; --pu-ink: #cfc6fb; }
+.hl-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0; padding: 28px 28px 20px; margin: 0 0 32px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(60,40,140,.07); }
+.hl-kicker { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--pu-sql); margin-bottom: 8px; }
+.hl-title { font-size: 24px; line-height: 1.3; letter-spacing: -0.015em; margin: 0 0 14px; max-width: 820px; font-weight: 650; }
+.hl-sub { color: var(--muted); margin: 0 0 22px; max-width: 760px; font-size: 14.5px; }
+.hl-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+.hl-stat { background: var(--pu-tint); border-radius: 0; padding: 16px 18px; min-width: 0; }
+.hl-stat .big { font-size: 44px; line-height: 1; font-weight: 700; letter-spacing: -0.03em; color: var(--pu-ink); font-variant-numeric: tabular-nums; }
+.hl-stat .what { font-size: 15px; font-weight: 600; margin-top: 6px; color: var(--muted); }
+.hl-stat .range { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.hl-legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+.hl-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; }
+.dot.course { background: var(--surface); border: 2.5px solid var(--pu-course); }
+.dot.sql { background: var(--pu-sql); }
+.hl-charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.db h4 { margin: 0 0 8px; font-size: 14.5px; }
+.db .unit { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.db-row { display: grid; grid-template-columns: 124px 1fr 46px; gap: 8px; align-items: center; height: 28px; }
+.db-row .lab { font-size: 12.5px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db-track { position: relative; height: 28px; background-image: linear-gradient(to right, var(--border) 1px, transparent 1px);
+  background-size: var(--grid, 33.33%) 100%; background-position: 0 0; }
+.db-line { position: absolute; top: 13px; height: 2px; background: var(--pu-line); border-radius: 2px; }
+.db-dot { position: absolute; top: 8px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; box-sizing: border-box; }
+.db-dot.course { background: var(--surface); border: 2.5px solid var(--pu-course); }
+.db-dot.sql { background: var(--pu-sql); box-shadow: 0 0 0 2px var(--surface); }
+.db-row:hover .db-track { background-color: var(--pu-tint); }
+.db-row .lab { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.db-row .lab span { overflow: hidden; text-overflow: ellipsis; }
+.lab-icon { width: 13px; height: 13px; flex: none; fill: var(--text); }
+.hl-stat .unsure { display: inline-block; font-size: 11px; font-weight: 500; color: var(--muted); border: 1px solid var(--border); padding: 0 5px; margin-left: 4px; vertical-align: 1px; }
+.pic-units { display: grid; gap: 5px; margin-top: 14px; }
+.pic-row { display: flex; flex-wrap: wrap; gap: 3px; }
+.pic-row i { display: block; width: 11px; height: 11px; }
+.pic-row i.sq.course { background: var(--surface); box-shadow: inset 0 0 0 2px var(--pu-course); }
+.pic-row i.sq.sql { background: var(--pu-sql); }
+.pic-row i.coin { border-radius: 50%; }
+.pic-row i.coin.course { background: var(--surface); box-shadow: inset 0 0 0 2px var(--pu-course); }
+.pic-row i.coin.sql { background: var(--pu-sql); }
+.pic-bars { display: grid; gap: 5px; margin-top: 14px; }
+.pic-bar { height: 11px; }
+.pic-bar.course { background: var(--surface); box-shadow: inset 0 0 0 2px var(--pu-course); }
+.pic-bar.sql { background: var(--pu-sql); }
+.db-delta { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; }
+.db-delta.down { color: var(--muted); font-weight: 500; }
+.db-axis { display: grid; grid-template-columns: 124px 1fr 46px; gap: 8px; margin-top: 2px; }
+.db-axis .tk { position: relative; height: 16px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.db-axis .tk span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.db-axis .tk span:first-child { transform: none; } .db-axis .tk span:last-child { transform: translateX(-100%); }
+.hl-verdict { margin-top: 20px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); font-size: 13.5px; }
+.hl-verdict b { color: var(--text); }
+.hl-foot { margin-top: 16px; font-size: 11.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 1000px) { .hl-charts { grid-template-columns: 1fr; gap: 26px; } }
+@media (max-width: 700px) { .hl-card { padding: 20px 16px 16px; } .hl-title { font-size: 21px; } .hl-stats { grid-template-columns: 1fr; } .hl-stat .big { font-size: 38px; } }
+
+
+/* One color per measure: tokens purple, wait time teal, cost orange. Each pair validated as an ordinal step. */
+.m-time { --pu-course: #4fb3a0; --pu-sql: #0f7a68; --pu-tint: #e9f6f2; --pu-line: #b5e2d8; --pu-ink: #0b5c4e; }
+.m-cost { --pu-course: #e89a6a; --pu-sql: #b04a1c; --pu-tint: #fdf0e8; --pu-line: #f3cdb5; --pu-ink: #8a3a14; }
+.m-neutral { --pu-course: var(--muted); --pu-sql: var(--text); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .m-time { --pu-course: #2a8a78; --pu-sql: #5fd0b8; --pu-tint: #12302a; --pu-line: #2a5a51; --pu-ink: #a8eadb; }
+  :root:not([data-theme="light"]) .m-cost { --pu-course: #b5592c; --pu-sql: #f0a070; --pu-tint: #36231a; --pu-line: #6b3d24; --pu-ink: #f7c4a3; } }
+:root[data-theme="dark"] .m-time { --pu-course: #2a8a78; --pu-sql: #5fd0b8; --pu-tint: #12302a; --pu-line: #2a5a51; --pu-ink: #a8eadb; }
+:root[data-theme="dark"] .m-cost { --pu-course: #b5592c; --pu-sql: #f0a070; --pu-tint: #36231a; --pu-line: #6b3d24; --pu-ink: #f7c4a3; }
+
+
+/* ---------- Token mix + cost vs time cards ---------- */
+:root { --tk-cached: #a99df0; --tk-input: #6f5dd3; --tk-output: #3b2c90; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tk-cached: #5547b8; --tk-input: #8a7de6; --tk-output: #c2b9fa; } }
+:root[data-theme="dark"] { --tk-cached: #5547b8; --tk-input: #8a7de6; --tk-output: #c2b9fa; }
+.hl-card h3.card-title { font-size: 20px; letter-spacing: -0.01em; margin: 0 0 6px; text-transform: none; color: var(--text); font-weight: 650; }
+.hl-card .card-sub { color: var(--muted); font-size: 14px; margin: 0 0 16px; max-width: 760px; }
+.sw-cached { background: var(--tk-cached); } .sw-input { background: var(--tk-input); } .sw-output { background: var(--tk-output); }
+.swatch.sq { border-radius: 0; }
+.mix .srow { grid-template-columns: 136px 22px 1fr 64px; }
+.mix .srow .lab { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.mix .strack > div { border-radius: 0 !important; }
+.mix .strack:hover { border-radius: 0; }
+.scatter { width: 100%; height: auto; display: block; }
+.scatter .grid line { stroke: var(--border); }
+.scatter .axis text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.scatter .axis-title { fill: var(--muted); font-size: 12px; }
+.scatter .link { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+.scatter .pt-course { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+.scatter .pt-sql { fill: var(--text); stroke: var(--surface); stroke-width: 2; }
+.scatter .lbl { fill: var(--text); font-size: 12px; }
+.scatter .lbl-icon path { fill: var(--text); }
+.scatter [data-tip] { cursor: default; }
+@media (max-width: 620px) { .mix .srow { grid-template-columns: 96px 18px 1fr 52px; } }
+
+
+/* ---------- Architecture tab ---------- */
+.arch { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.arch-col { background: var(--surface); border: 1px solid var(--border); padding: 22px 20px; }
+.arch-col h3 { font-size: 18px; text-transform: none; letter-spacing: -0.01em; color: var(--text); margin: 0 0 4px; }
+.arch-col .tag-line { color: var(--muted); font-size: 13.5px; margin: 0 0 18px; }
+.node { border: 1px solid var(--border); background: var(--surface); padding: 10px 12px; text-align: center; }
+.node b { display: block; font-size: 14px; }
+.node span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.node.ai { background: var(--surface-2); }
+.node.db { border-width: 2px; }
+.node.guard { border-style: dashed; background: var(--surface-2); }
+.node.hi { border-color: var(--pu-sql); box-shadow: inset 3px 0 0 var(--pu-sql); }
+.arch .down { height: 26px; position: relative; }
+.arch .down::before { content: ""; position: absolute; left: 50%; top: 2px; bottom: 6px; width: 2px; margin-left: -1px; background: var(--muted); }
+.arch .down::after { content: ""; position: absolute; left: 50%; bottom: 0; margin-left: -5px; border: 5px solid transparent; border-top: 7px solid var(--muted); border-bottom: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 8px; }
+.chips i { font-style: normal; font-family: var(--mono); font-size: 11.5px; padding: 2px 6px; background: var(--surface-2); border: 1px solid var(--border); }
+.chips i.w { border-color: var(--write); color: var(--write); }
+.branches { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.branch { display: grid; }
+.arch-diff { margin-top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.arch-diff div { border-top: 2px solid var(--pu-sql); padding-top: 8px; font-size: 13.5px; }
+.arch-diff b { display: block; margin-bottom: 2px; }
+@media (max-width: 860px) { .arch, .arch-diff { grid-template-columns: 1fr; } }
+
+/* ---------- Explorer ---------- */
+.quick { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; align-items: center; }
+.quick::before { content: "Homework shortcuts"; font-size: 12px; color: var(--muted); margin-right: 4px; }
+.quick button, .subtabs button, .pager button { font: inherit; font-size: 13px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); border-radius: 99px; padding: 4px 11px; cursor: pointer; }
+.quick button:hover, .pager button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.subtabs { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.subtabs button { border: none; border-radius: 0; background: none; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.subtabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.subtabs .n { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 4px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.toolbar input, .toolbar select { font: inherit; font-size: 14px; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.toolbar input { flex: 1 1 220px; min-width: 0; }
+.toolbar select { max-width: 220px; }
+#filters { display: contents; }
+.only { font-size: 13px; background: var(--accent-soft); color: var(--accent); border-radius: 99px; padding: 3px 4px 3px 11px; display: inline-flex; gap: 6px; align-items: center; }
+.only button { border: none; background: none; color: inherit; cursor: pointer; font: inherit; padding: 0 6px; }
+.count-label { color: var(--muted); font-size: 13px; margin-left: auto; }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td.wrap { white-space: normal; min-width: 220px; }
+th { font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface); }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+th[aria-sort="ascending"]::after { content: " ▲"; } th[aria-sort="descending"]::after { content: " ▼"; }
+tbody tr { cursor: pointer; } tbody tr:hover { background: var(--surface-2); }
+tbody tr:last-child td { border-bottom: none; }
+td.empty { text-align: center; color: var(--muted); padding: 28px; cursor: default; }
+.st { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+.st.placed { background: var(--accent-soft); color: var(--accent); }
+.st.shipped { background: var(--hw-soft); color: var(--hw); }
+.st.delivered, .st.yes, .st.auto_approved { background: var(--read-soft); color: var(--read); }
+.st.cancelled, .st.refunded, .st.queued_for_approval { background: var(--write-soft); color: var(--write); }
+.pager { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 12px; color: var(--muted); font-size: 13px; }
+.pager button:disabled { opacity: .4; cursor: default; }
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.25); z-index: 9; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100vw); background: var(--surface); border-left: 1px solid var(--border);
+  z-index: 10; display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,.08); }
+.drawer-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; }
+.drawer-head span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-head button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font: inherit; }
+.drawer-body { overflow-y: auto; padding: 16px; font-size: 14px; }
+.drawer-body section { margin-bottom: 18px; }
+.drawer-body h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+dl.kv { display: grid; grid-template-columns: 130px 1fr; gap: 4px 12px; margin: 0; }
+dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+a.lnk { color: var(--accent); cursor: pointer; text-decoration: none; } a.lnk:hover { text-decoration: underline; }
+.note { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.note.good { background: var(--read-soft); color: var(--read); } .note.bad { background: var(--write-soft); color: var(--write); }
+ul.mini { list-style: none; margin: 0; padding: 0; } ul.mini li { padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+ul.mini li:last-child { border-bottom: none; }
+pre.body { white-space: pre-wrap; font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); padding: 12px; border-radius: 8px; margin: 0; }
+@media (max-width: 620px) { .count-label { margin-left: 0; width: 100%; } dl.kv { grid-template-columns: 110px 1fr; } }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="brand">Cartwheel <small>support agents</small></div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="how">How the agents work</button>
+    <button role="tab" aria-selected="false" data-tab="arch">Architecture</button>
+    <button role="tab" aria-selected="false" data-tab="model">What the model sees</button>
+    <button role="tab" aria-selected="false" data-tab="compare">Model comparison</button>
+    <button role="tab" aria-selected="false" data-tab="data">Explore the data</button>
+  </nav>
+</div></header>
+
+<main class="wrap">
+<section id="tab-how">
+  <h2>How the agents work</h2>
+  <p class="lede" id="how-lede"></p>
+  <div class="seg" id="variant-switch" role="radiogroup" aria-label="Agent variant">
+    <button type="button" role="radio" data-variant="tools">Course agent <span>small tools</span></button>
+    <button type="button" role="radio" data-variant="sql">SQL agent <span>read_sql + write_sql</span></button>
+  </div>
+  <div class="legend" id="legend"></div>
+
+  <div class="flow" id="flow">
+    <div class="col">
+      <h3>1 · Who's asking</h3>
+      <div class="who">
+        <div class="card"><div class="t">Shopper</div><div class="d">500 users. Sees only their own orders. Demo: user <span class="mono">1</span>.</div></div>
+        <div class="card"><div class="t">Merchant</div><div class="d">20 users, one per store. Sees only their store's orders. Demo: user <span class="mono">9002</span> (store 2).</div></div>
+        <div class="card"><div class="t">Support staff</div><div class="d">5 users. Can see any order but has none of their own. Demo: user <span class="mono">9501</span>.</div></div>
+      </div>
+    </div>
+    <div class="col"><h3>2 · Session + agent</h3><div id="session"></div></div>
+    <div class="col"><h3 id="tools-heading"></h3><div id="tools"></div></div>
+    <div class="col"><h3 id="tables-heading"></h3><div id="tables"></div></div>
+  </div>
+
+  <div class="walk">
+    <h3>Walk through one request</h3>
+    <p class="hint" style="margin:-4px 0 12px">The expected flow from the code. A real model can choose differently, which is what the evals measure.</p>
+    <div class="walk-pick" id="walk-pick"></div>
+    <ol class="steps" id="walk-steps"></ol>
+  </div>
+
+  <div class="takeaways" id="takeaways"></div>
+</section>
+
+<section id="tab-arch" hidden>
+  <h2>Architecture</h2>
+  <p class="lede">Same question, same AI, same database. The difference is how the AI reaches the data.</p>
+  <div class="arch">
+    <div class="arch-col">
+      <h3>Original: simple tools</h3>
+      <p class="tag-line">The AI picks from a menu of small, single-purpose tools.</p>
+      <div class="node"><b>Person asks a question</b><span>shopper, merchant, or support</span></div>
+      <div class="down"></div>
+      <div class="node guard"><b>Server adds who they are</b><span>role, user id, store: never taken from the chat</span></div>
+      <div class="down"></div>
+      <div class="node ai"><b>AI model</b><span>reads the prompt, picks a tool</span></div>
+      <div class="down"></div>
+      <div class="node"><b>10 small tools</b><span>each one checks permissions and rules in code</span>
+        <div class="chips"><i>get_order</i><i>find_order</i><i>list_my_orders</i><i>get_refund_status</i><i>search_products</i><i>get_policy</i><i>search_help_center</i><i class="w">issue_refund</i><i class="w">cancel_order</i><i class="w">escalate_to_human</i></div></div>
+      <div class="down"></div>
+      <div class="node db"><b>Database</b><span>stores, products, orders, refunds</span></div>
+    </div>
+
+    <div class="arch-col">
+      <h3>SQL: the AI writes queries</h3>
+      <p class="tag-line">The AI writes its own database queries through two tools.</p>
+      <div class="node"><b>Person asks a question</b><span>shopper, merchant, or support</span></div>
+      <div class="down"></div>
+      <div class="node guard"><b>Server adds who they are</b><span>role, user id, store: never taken from the chat</span></div>
+      <div class="down"></div>
+      <div class="node ai hi"><b>AI model</b><span>reads the prompt, writes SQL</span></div>
+      <div class="branches">
+        <div class="branch">
+          <div class="down"></div>
+          <div class="node hi"><b>read_sql</b><span>any SELECT query</span></div>
+          <div class="down"></div>
+          <div class="node guard"><b>Private copy</b><span>holds only this person's rows, rebuilt per query, read-only</span></div>
+        </div>
+        <div class="branch">
+          <div class="down"></div>
+          <div class="node hi"><b>write_sql</b><span>3 allowed statements</span></div>
+          <div class="down"></div>
+          <div class="node guard"><b>Same checks as before</b><span>cancel, refund, escalate: permissions, $100 limit</span></div>
+        </div>
+      </div>
+      <div class="down"></div>
+      <div class="node db"><b>Database</b><span>stores, products, orders, refunds</span></div>
+    </div>
+  </div>
+  <div class="arch-diff">
+    <div><b>Fewer tools, more to know</b>2 tools instead of 10, but the AI has to know the tables and write correct queries itself.</div>
+    <div><b>Same safety rules</b>Permissions and money rules stay in code. The AI can't see or change data it isn't allowed to.</div>
+    <div><b>Different failure signals</b>An off-limits order returns "no rows" instead of "permission denied".</div>
+  </div>
+</section>
+
+<section id="tab-model" hidden>
+  <h2>What the model sees</h2>
+  <p class="lede">Every model call sends the system prompt plus the full definition of every tool the role can use. These are the exact definitions from the code, with token counts from the <span class="mono" id="tokenizer"></span> tokenizer. Conversation history and tool results come on top.</p>
+  <div class="toolbar"><label class="hint" for="role-pick">Role</label>
+    <select id="role-pick"><option value="shopper">Shopper</option><option value="merchant">Merchant</option><option value="support">Support</option></select></div>
+  <div class="delta" id="delta"></div>
+  <div class="compare" id="compare"></div>
+  <h3 style="margin-top:28px">System prompts</h3>
+  <p class="hint" style="margin-top:-4px">Lines that appear in only one of the two prompts are highlighted.</p>
+  <div class="compare" id="prompts"></div>
+</section>
+
+<section id="tab-data" hidden>
+  <div id="explorer">
+    <h2>Explore the data</h2>
+    <p class="lede">The same fake world the agent sees. Click any row for details and links to related records. The world's "today" is <span class="mono" id="asof"></span>.</p>
+    <div class="quick" id="quick"></div>
+    <div class="subtabs" id="subtabs" role="tablist"></div>
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Search…" autocomplete="off">
+      <span id="filters"></span>
+      <span class="only" id="only" hidden></span>
+      <span class="count-label" id="count"></span>
+    </div>
+    <div class="table-wrap"><table id="grid"><thead></thead><tbody></tbody></table></div>
+    <div class="pager"><button type="button" id="prev">‹ Prev</button><span id="page"></span><button type="button" id="next">Next ›</button></div>
+  </div>
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" hidden aria-label="Record details">
+    <div class="drawer-head"><button type="button" id="back" title="Back" hidden>‹</button><span id="drawer-title"></span><button type="button" id="close" title="Close">✕</button></div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </aside>
+</section>
+<section id="tab-compare" hidden>
+  <div id="cmp"></div>
+  <div class="tip" id="tip" hidden></div>
+</section>
+</main>
+
+<script>
+const DATA = /*__DATA__*/null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = n => Number(n).toLocaleString();
+
+// ---------- Token sizes (from the code, via build.py) ----------
+function sizes(variant, role) {
+  const A = DATA && DATA.agents;
+  if (!A) return null;
+  const v = A.variants[variant], names = v.roles[role];
+  const tools = names.reduce((sum, n) => sum + A.tools[n].tokens, 0);
+  return { count: names.length, tools, prompt: v.prompt_tokens, total: tools + v.prompt_tokens };
+}
+
+// ---------- The two agent variants ----------
+const COMMON_SESSION = {
+  context: { t: "Session context", d: 'The CLI or server looks the user up in <span class="mono">users</span> and fixes <span class="mono">role</span>, <span class="mono">user_id</span>, <span class="mono">store_id</span>. Nothing typed in chat can change it.', guard: true },
+  loop: { t: "Model loop", d: 'A small model (default <span class="mono">gpt-4o-mini</span>) reads the chat, calls a tool, reads the result, and repeats until it can answer.' },
+};
+const ALL_TABLES = ["orders", "products", "stores", "users", "refunds", "escalations", "policies", "facts", "world"];
+
+const VARIANTS = {
+  tools: {
+    lede: "A person sends a message, the server attaches who they are, and the model picks from small, single-purpose tools. Every tool checks permissions in code and reads or writes the local SQLite database. Hover a tool to see which data it touches, or a table to see which tools use it.",
+    legend: [["hw", "HW1", "you implement"], ["given", "provided", "already done"], ["read", "read", "only looks"], ["write", "write", "changes data"]],
+    session: [COMMON_SESSION.context,
+      { t: "System prompt", d: 'Scope, refusals, "cite the policy id", "escalate refunds over the limit". In <span class="mono">agent/agent.py</span>. Part C asks you to find a gap here.' },
+      COMMON_SESSION.loop,
+      { t: "Safety in code", d: '<span class="mono">auth.py</span> permission checks run inside each tool. A kill switch can pause the write tools. The model can\'t bypass either.', guard: true }],
+    toolsHeading: "3 · Tools the model can call",
+    tablesHeading: "4 · Data (local SQLite)",
+    tools: [
+      { name: "search_help_center", kind: "read", hw: false, roles: "all roles", rule: "Keyword (BM25) search over the 18 help-center policy docs.", reads: ["policies"], writes: [] },
+      { name: "get_policy", kind: "read", hw: true, roles: "all roles", rule: "Fetch one policy doc by exact id, e.g. cw-returns.", reads: ["policies"], writes: [] },
+      { name: "search_products", kind: "read", hw: true, roles: "all roles", rule: "Every word must appear in the title or description. Optional store and price cap. Cheapest first.", reads: ["stores", "products"], writes: [] },
+      { name: "get_order", kind: "read", hw: false, roles: "all roles", rule: "One order by id, only if it's in your scope.", reads: ["orders", "stores"], writes: [] },
+      { name: "list_my_orders", kind: "read", hw: true, roles: "shoppers + merchants", rule: "Your 20 newest orders, or your store's. Support gets an error.", reads: ["orders"], writes: [] },
+      { name: "find_order", kind: "read", hw: true, roles: "all roles", rule: "Fuzzy product-name search (\"the vase I bought\") within your scope. Top 5, newest first.", reads: ["orders", "products"], writes: [] },
+      { name: "get_refund_status", kind: "read", hw: true, roles: "all roles", rule: "Your addition. Shows whether a refund on an order is approved or still waiting for a human, and what happens next.", reads: ["orders", "refunds"], writes: [] },
+      { name: "audit_my_products", kind: "read", hw: true, roles: "merchants only", rule: "Your addition. Flags missing titles, zero or negative prices, and duplicate titles in the merchant's own store.", reads: ["products"], writes: [] },
+      { name: "issue_refund", kind: "write", hw: false, roles: "all roles", rule: "Must be refund-eligible. ≤ $100 is auto-approved; > $100 is queued for a human.", reads: ["orders"], writes: ["refunds", "orders"] },
+      { name: "cancel_order", kind: "write", hw: true, roles: "all roles", rule: "Checks scope first, then status: only orders still 'placed' (not shipped) can be cancelled.", reads: ["orders"], writes: ["orders"] },
+      { name: "escalate_to_human", kind: "write", hw: false, roles: "all roles", rule: "Opens a ticket for a person, who replies within 24 hours.", reads: [], writes: ["escalations"] },
+    ],
+    tables: [
+      { name: "stores", count: "20", d: "Independent shops. Some override the return window or charge a restocking fee." },
+      { name: "products", count: "800", d: "40 per store: title, description, category, price." },
+      { name: "orders", count: "10,000", d: "One product each. Status: placed → shipped → delivered, or cancelled / refunded." },
+      { name: "users", count: "525", d: "Shoppers, merchants (tied to a store), support staff. Used to build the session context." },
+      { name: "refunds", count: "573", d: "Auto-approved or queued for approval." },
+      { name: "escalations", count: "150", d: "Tickets for human support." },
+      { name: "policies", count: "18 docs", d: "Markdown help-center docs in data/policies/, generated from facts.yaml." },
+      { name: "data_quality_cases", count: "6", d: "Deliberately broken records for tricky test scenarios. No tool reads this." },
+    ],
+    walks: {
+      "Shopper asks about 4127": [
+        ["you", "Shopper user 1: \"Where's my order 4127?\""],
+        ["server", "Session context fixed as role=shopper, user_id=1."],
+        ["model", "Decides to call get_order(4127)."],
+        ["tool", "get_order checks auth: order 4127 belongs to user 1, so it's allowed. It reads orders + stores.", "{ok: true, order: {status: \"delivered\", total_usd: 84.0, …}}"],
+        ["model", "Replies with the status and delivery date in plain language."],
+      ],
+      "Merchant tries 4127": [
+        ["you", "Merchant user 9002 (store 2): \"Show me order 4127.\""],
+        ["server", "Session context fixed as role=merchant, store_id=2."],
+        ["model", "Calls get_order(4127)."],
+        ["tool", "auth.py: order 4127 belongs to store 1, not store 2. Denied before any details are returned.", "{ok: false, error: \"permission_denied\"}"],
+        ["model", "Should decline without revealing anything about the order. Check this in Part B."],
+      ],
+      "Refund 4455 (over $100)": [
+        ["you", "Shopper user 1: \"Please refund order 4455.\""],
+        ["model", "The prompt says to call get_order first to check refund eligibility."],
+        ["tool", "get_order(4455): in scope, refund_eligible is true, and the total is $240."],
+        ["model", "Either calls issue_refund or goes straight to escalate_to_human. Which one it picks is what you observe."],
+        ["tool", "issue_refund: the amount is over the $100 threshold, so code queues it instead of paying out.", "{ok: true, status: \"queued_for_approval\"}"],
+        ["model", "Should tell the user a human will review it, not that it's refunded."],
+      ],
+      "Cancel a shipped order": [
+        ["you", "Shopper: \"Cancel order 4127.\""],
+        ["model", "Calls cancel_order(4127, reason)."],
+        ["tool", "Your code: 1) does the order exist? 2) is it in scope? 3) is it still 'placed'? It's 'delivered', so no.", "{ok: false, error: \"not_eligible\", reason: \"… only before shipment …\"}"],
+        ["model", "Explains it can't be cancelled and may suggest a return instead (cite cw-returns)."],
+      ],
+    },
+    takeaways: () => [
+      ["Permissions live in code, not the prompt.", 'Even if the model tries to fetch someone else\'s order, the tool returns <span class="mono">permission_denied</span>. That\'s why merchant 9002 can\'t see order 4127.'],
+      ["Money rules are in code too.", 'Refunds up to $100 go through automatically. Larger ones are queued for a human. The 30-day return window comes from <span class="mono">facts.yaml</span>.'],
+      ["The prompt shapes the model's choices.", "Which tool it picks, whether it cites a policy, and whether it escalates. Part C tests whether a missing instruction causes a failure."],
+    ],
+  },
+
+  sql: {
+    lede: "Same people, same prompt, same data, but the model gets two tools and writes SQL. Code still enforces every permission and business rule: reads run on a private copy that holds only this user's rows, and writes must be one of three statements, which are routed to the same checked logic the course agent uses. Hover a tool or table to trace the connections.",
+    legend: [["read", "read", "only looks"], ["write", "write", "changes data"], ["given", "code", "enforces the rules (dashed)"]],
+    session: [COMMON_SESSION.context,
+      { t: "System prompt", d: 'The course prompt with new tool guidance: look things up with read_sql, change things with write_sql, check <span class="mono">refund_eligible</span> before refunding. In <span class="mono">agent/sql_agent.py</span>.' },
+      { t: "Model loop", d: "Same loop, but the model writes SQL queries instead of choosing among many tools, so it has to know the tables, columns, and rules." },
+      { t: "Safety in code", d: "The model's SQL never runs against the real database. Reads hit a throwaway copy; writes are parsed and replayed through checked code.", guard: true }],
+    toolsHeading: "3 · Two tools + the code behind them",
+    tablesHeading: "4 · Data as read_sql sees it",
+    tools: [
+      { name: "read_sql", kind: "read", roles: "all roles", rule: "One SELECT per call. Up to 100 rows, 2-second limit. Blocks writes, PRAGMA, ATTACH, and the real clock ('now', CURRENT_DATE).", reads: ALL_TABLES, writes: [] },
+      { guard: "read_sql", t: "Private copy, rebuilt per query (~10–15 ms)", lines: [
+        ["Shopper", "own orders and their refunds, own tickets, own user row"],
+        ["Merchant", "store's orders and refunds, store's tickets, own user row"],
+        ["Support", "everything"],
+        ["Everyone", "stores, products, policies, facts, world"],
+        ["Never copied", "data_quality_cases, meta"]] },
+      { name: "write_sql", kind: "write", roles: "all roles", rule: "Accepts exactly these three statements. Anything else fails with unsupported_statement and a list of the accepted forms.",
+        shapes: ["UPDATE orders SET status = 'cancelled' WHERE id = …", "INSERT INTO refunds (order_id, amount_cents, reason) VALUES (…)", "INSERT INTO escalations (summary, context[, order_id]) VALUES (…)"],
+        reads: ["orders"], writes: ["orders", "refunds", "escalations"] },
+      { guard: "write_sql", t: "Parser → the same checked logic", lines: [
+        ["Cancel", "cancel_order: scope first, then 'placed' only"],
+        ["Refund", "issue_refund: scope, eligibility, ≤ $100 auto-approved, else queued for a human"],
+        ["Escalate", "user, store, and date come from the session; the order's scope is checked"],
+        ["Kill switch", "still pauses refunds and cancels"]] },
+    ],
+    tables: [
+      { name: "orders", count: "scoped", d: "Only the caller's orders: own (shopper), store's (merchant), or all 10,000 (support)." },
+      { name: "refunds", count: "scoped", d: "Only refunds on orders the caller can see." },
+      { name: "escalations", count: "scoped", d: "The caller's own tickets; merchants also see their store's." },
+      { name: "users", count: "scoped", d: "Just the caller's own row (support sees all 525)." },
+      { name: "products", count: "800", d: "Public catalog, all rows." },
+      { name: "stores", count: "20", d: "Public, including return-window overrides." },
+      { name: "policies", count: "18 rows", d: "The help-center docs as a table. Replaces search_help_center and get_policy." },
+      { name: "facts", count: "key/value", d: "New: policy numbers from facts.yaml, such as the $100 threshold." },
+      { name: "world", count: "1 row", d: "New: today = 2026-07-01, so queries never use the real clock." },
+      { name: "data_quality_cases", count: "hidden", d: "Not copied. read_sql can't see it." },
+    ],
+    walks: {
+      "Shopper asks about 4127": [
+        ["you", "Shopper user 1: \"Where's my order 4127?\""],
+        ["server", "Session context fixed as role=shopper, user_id=1."],
+        ["model", "Writes a query: SELECT o.id, o.status, o.total_cents / 100.0, … FROM orders o JOIN products p … WHERE o.id = 4127"],
+        ["tool", "read_sql builds user 1's private copy (only their orders) and runs the query read-only.", "{ok: true, columns: [\"id\", \"status\", …], rows: [[4127, \"delivered\", 84.0, …]]}"],
+        ["model", "Replies with the status and delivery date."],
+      ],
+      "Merchant tries 4127": [
+        ["you", "Merchant user 9002 (store 2): \"Show me order 4127.\""],
+        ["server", "Session context fixed as role=merchant, store_id=2."],
+        ["model", "SELECT * FROM orders WHERE id = 4127"],
+        ["tool", "Store 2's private copy has no order 4127, so the query finds nothing. No permission check fires; the row just isn't there.", "{ok: true, rows: [], row_count: 0}"],
+        ["model", "Should say it can't find that order. A difference to watch: the course agent hears \"permission_denied\", this one hears \"no rows\", so it may wrongly say the order doesn't exist. Either way nothing leaks."],
+      ],
+      "Refund 4455 (over $100)": [
+        ["you", "Shopper user 1: \"Please refund order 4455.\""],
+        ["model", "Reads first: SELECT total_cents, refund_eligible FROM orders WHERE id = 4455"],
+        ["tool", "read_sql on user 1's copy.", "{ok: true, rows: [[24000, 1]]}"],
+        ["model", "INSERT INTO refunds (order_id, amount_cents, reason) VALUES (4455, 24000, 'arrived cracked')"],
+        ["tool", "The parser recognizes a refund and calls the same issue_refund logic: in scope, eligible, and $240 is over $100, so it's queued.", "{operation: \"issue_refund\", ok: true, status: \"queued_for_approval\"}"],
+        ["model", "Should tell the user a person will review it, not that it's refunded."],
+      ],
+      "Cancel a shipped order": [
+        ["you", "Shopper: \"Cancel order 4127.\""],
+        ["model", "UPDATE orders SET status = 'cancelled' WHERE id = 4127"],
+        ["tool", "The parser routes it to cancel_order: in scope, but the status is 'delivered'.", "{operation: \"cancel_order\", ok: false, error: \"not_eligible\"}"],
+        ["model", "Explains it can't be cancelled and may suggest a return."],
+      ],
+      "Uses the real clock": [
+        ["you", "Shopper: \"Can I still return order 4127?\""],
+        ["model", "SELECT julianday('now') - julianday(delivered_at) FROM orders WHERE id = 4127"],
+        ["tool", "Rejected before it runs: the world's date is fixed, and the real date would make the window look expired.", "{ok: false, error: \"invalid_argument\", hint: \"Use (SELECT today FROM world) …\"}"],
+        ["model", "Retries with (SELECT today FROM world): 12 days since delivery, inside the 30-day window, so yes. Costs one extra model call."],
+      ],
+    },
+    takeaways: () => {
+      const t = sizes("tools", "shopper"), s = sizes("sql", "shopper");
+      const size = t && s
+        ? `Its 2 tool definitions are <b>${fmt(s.tools)}</b> tokens vs <b>${fmt(t.tools)}</b> for a shopper's ${t.count} small tools, sent with every model call. Tool results (query rows) add more. See "What the model sees".`
+        : 'Its tool definitions go out with every model call. See "What the model sees".';
+      const sizeTitle = t && s && s.tools < t.tools ? "Fewer tokens of instructions, more to know." : "Bigger instructions on every call.";
+      return [
+        ["Permissions come from the data.", "The private copy only contains this user's rows, so an out-of-scope query returns nothing rather than an error."],
+        ["Writes are tools in disguise.", "write_sql accepts three statements and calls the same checked logic as the course agent. The rules didn't move; only the input format changed."],
+        [sizeTitle, size],
+      ];
+    },
+  },
+};
+
+// ---------- Render the diagram for one variant ----------
+const LABEL = { you: "Person", server: "Server", model: "Model", tool: "Tool code" };
+let current = null;
+
+function card(c) {
+  if (c.guard && typeof c.guard === "string") {
+    return `<div class="card linkable guard" data-tool="${c.guard}"><div class="t">${esc(c.t)}</div>
+      <div class="sub">${c.lines.map(([k, v]) => `<div><b>${esc(k)}:</b> ${esc(v)}</div>`).join("")}</div></div>`;
+  }
+  const badge = current === "tools" ? `<span class="pill ${c.hw ? "hw" : "given"}">${c.hw ? "HW1" : "provided"}</span>` : "";
+  const reads = c.reads.filter(r => !c.writes.includes(r));
+  const chips = reads.length > 6 ? `<span class="chip">reads every table in the copy</span>` : reads.map(r => `<span class="chip">${r}</span>`).join("");
+  return `<div class="card linkable tool ${c.hw ? "hw" : ""}" data-tool="${c.name}">
+    <div class="t"><span class="mono">${c.name}</span><span class="pill ${c.kind}">${c.kind}</span>${badge}</div>
+    <div class="rule">${esc(c.rule)}</div>
+    ${c.shapes ? `<ul class="shapes">${c.shapes.map(s => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}
+    <div class="touches">${chips}${c.writes.map(w => `<span class="chip w">✎ ${w}</span>`).join("")}<span class="chip" style="background:none">${c.roles}</span></div>
+  </div>`;
+}
+
+function renderHow(variant) {
+  current = variant;
+  const v = VARIANTS[variant];
+  document.querySelectorAll("#variant-switch [data-variant]").forEach(b => b.setAttribute("aria-checked", b.dataset.variant === variant));
+  document.getElementById("how-lede").textContent = v.lede;
+  document.getElementById("legend").innerHTML = v.legend.map(([cls, pill, text]) => `<span><span class="pill ${cls}">${pill}</span> ${text}</span>`).join("");
+  document.getElementById("session").innerHTML = v.session.map(c => `<div class="card ${c.guard ? "guard" : ""}"><div class="t">${c.t}</div><div class="d">${c.d}</div></div>`).join("");
+  document.getElementById("tools-heading").textContent = v.toolsHeading;
+  document.getElementById("tables-heading").textContent = v.tablesHeading;
+  document.getElementById("tools").innerHTML = v.tools.map(card).join("");
+  document.getElementById("tables").innerHTML = v.tables.map(t => `
+    <div class="card linkable table-card" data-table="${t.name}"><div class="t"><span class="mono">${t.name}</span><span class="count">${t.count}</span></div><div class="d">${esc(t.d)}</div></div>`).join("")
+    + (variant === "tools" ? `<p class="hint" style="margin:10px 2px 0">The world's "today" is fixed at <span class="mono">2026-07-01</span>, so return windows always compute the same way.</p>` : "");
+  document.getElementById("takeaways").innerHTML = v.takeaways().map(([b, t]) => `<div><b>${b}</b>${t}</div>`).join("");
+  wireHover(v);
+  const pick = document.getElementById("walk-pick");
+  pick.innerHTML = Object.keys(v.walks).map(n => `<button type="button">${n}</button>`).join("");
+  pick.querySelectorAll("button").forEach(b => b.addEventListener("click", () => showWalk(b.textContent)));
+  showWalk(Object.keys(v.walks)[0]);
+  try { localStorage.setItem("cw-variant", variant); } catch (e) {}
+}
+
+function showWalk(name) {
+  const pick = document.getElementById("walk-pick");
+  pick.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.textContent === name));
+  document.getElementById("walk-steps").innerHTML = VARIANTS[current].walks[name].map(([who, text, res]) =>
+    `<li><div><div class="who-tag">${LABEL[who]}</div>${esc(text)}${res ? `<br><span class="res">${esc(res)}</span>` : ""}</div></li>`).join("");
+}
+
+function wireHover(v) {
+  const flow = document.getElementById("flow");
+  const tools = v.tools.filter(t => t.name);
+  const light = (toolNames, tableNames) => {
+    flow.classList.add("focus");
+    flow.querySelectorAll(".linkable").forEach(el =>
+      el.classList.toggle("lit", toolNames.includes(el.dataset.tool) || tableNames.includes(el.dataset.table)));
+  };
+  const clear = () => { flow.classList.remove("focus"); flow.querySelectorAll(".lit").forEach(el => el.classList.remove("lit")); };
+  flow.querySelectorAll("[data-tool]").forEach(el => {
+    const t = tools.find(x => x.name === el.dataset.tool);
+    el.addEventListener("mouseenter", () => light([t.name], [...t.reads, ...t.writes]));
+    el.addEventListener("mouseleave", clear);
+  });
+  flow.querySelectorAll("[data-table]").forEach(el => {
+    const name = el.dataset.table;
+    el.addEventListener("mouseenter", () => light(tools.filter(t => t.reads.includes(name) || t.writes.includes(name)).map(t => t.name), [name]));
+    el.addEventListener("mouseleave", clear);
+  });
+}
+
+document.querySelectorAll("#variant-switch [data-variant]").forEach(b => b.addEventListener("click", () => renderHow(b.dataset.variant)));
+let startVariant = "tools";
+try { if (localStorage.getItem("cw-variant") === "sql") startVariant = "sql"; } catch (e) {}
+renderHow(startVariant);
+
+// ---------- What the model sees ----------
+function paramRows(schema) {
+  const props = Object.entries(schema.properties || {});
+  if (!props.length) return '<p class="hint" style="margin:4px 0 0">No parameters.</p>';
+  return `<table><tbody>${props.map(([name, p]) => {
+    const types = p.type ? [p.type] : (p.anyOf || []).map(a => a.type);
+    const optional = types.includes("null") || "default" in p;
+    const extra = [optional ? "optional" : "required", "default" in p ? `default ${JSON.stringify(p.default)}` : ""].filter(Boolean).join(", ");
+    return `<tr><td class="mono">${esc(name)}</td><td>${esc(types.filter(t => t !== "null").join(" | "))} <span class="hint">${esc(extra)}</span></td><td>${esc(p.description || "")}</td></tr>`;
+  }).join("")}</tbody></table>`;
+}
+
+function renderModel(role) {
+  const A = DATA && DATA.agents;
+  if (!A) { document.getElementById("compare").innerHTML = '<p class="hint">Run build.py to load the agent definitions.</p>'; return; }
+  document.getElementById("tokenizer").textContent = A.tokenizer;
+  const side = (variant, title) => {
+    const s = sizes(variant, role);
+    const tools = A.variants[variant].roles[role].map(n => A.tools[n]);
+    return `<div class="side">
+      <div class="side-head"><b>${title}</b><span class="hint">${s.count} tool${s.count === 1 ? "" : "s"}</span></div>
+      <div class="stats"><div><b>${fmt(s.tools)}</b>tool tokens</div><div><b>${fmt(s.prompt)}</b>prompt tokens</div><div><b>${fmt(s.total)}</b>per model call</div></div>
+      ${tools.map(t => `<div class="tdef">
+        <div class="tdef-head"><span class="mono"><b>${esc(t.name)}</b></span><span class="pill given">${fmt(t.tokens)} tokens</span></div>
+        <pre>${esc(t.description)}</pre>
+        ${paramRows(t.parameters)}
+        <details><summary>Raw definition sent to the API</summary><pre>${esc(JSON.stringify({ type: t.type, name: t.name, description: t.description, parameters: t.parameters }, null, 2))}</pre></details>
+      </div>`).join("")}
+    </div>`;
+  };
+  const t = sizes("tools", role), s = sizes("sql", role), diff = s.total - t.total;
+  document.getElementById("delta").innerHTML = `For ${{ shopper: "a shopper", merchant: "a merchant", support: "support staff" }[role]}, the SQL agent sends <b>${fmt(Math.abs(diff))} ${diff >= 0 ? "more" : "fewer"} tokens</b> (${diff >= 0 ? "+" : "−"}${Math.abs(Math.round(diff / t.total * 100))}%) on every model call than the course agent: ${fmt(s.total)} vs ${fmt(t.total)}.`;
+  document.getElementById("compare").innerHTML = side("tools", "Course agent") + side("sql", "SQL agent");
+
+  const lines = v => A.variants[v].prompt.split("\n");
+  const a = lines("tools"), b = lines("sql"), inA = new Set(a.map(l => l.trim())), inB = new Set(b.map(l => l.trim()));
+  const pre = (ls, other) => `<pre class="prompt">${ls.map(l => other.has(l.trim()) ? esc(l) : `<span class="diff">${esc(l) || " "}</span>`).join("\n")}</pre>`;
+  document.getElementById("prompts").innerHTML =
+    `<div><div class="side-head"><b>Course agent</b><span class="hint">${fmt(A.variants.tools.prompt_tokens)} tokens</span></div>${pre(a, inB)}</div>` +
+    `<div><div class="side-head"><b>SQL agent</b><span class="hint">${fmt(A.variants.sql.prompt_tokens)} tokens</span></div>${pre(b, inA)}</div>`;
+}
+document.getElementById("role-pick").addEventListener("change", e => renderModel(e.target.value));
+renderModel("shopper");
+
+// ---------- Tabs ----------
+const TABS = ["how", "arch", "model", "compare", "data"];
+function showTab(name) {
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  TABS.forEach(t => { document.getElementById(`tab-${t}`).hidden = t !== name; });
+  try { localStorage.setItem("cw-tab", name); } catch (e) {}
+}
+document.querySelectorAll("nav.tabs button").forEach(btn => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
+</script>
+<script>
+(function () {
+  const root = document.getElementById("explorer");
+  if (!DATA) { root.innerHTML = '<p class="lede">No data embedded yet. Run <span class="mono">uv run python explorer/build.py</span>.</p>'; return; }
+
+  // ---------- Load + index ----------
+  const T = {};
+  for (const [name, { cols, rows }] of Object.entries(DATA.tables)) {
+    T[name] = rows.map(r => Object.fromEntries(cols.map((c, i) => [c, r[i]])));
+  }
+  const index = name => new Map(T[name].map(r => [r.id ?? r.case_id, r]));
+  const IDX = { stores: index("stores"), products: index("products"), users: index("users"), orders: index("orders"),
+    refunds: index("refunds"), escalations: index("escalations"), policies: index("policies"), data_quality_cases: index("data_quality_cases") };
+  const group = (rows, key) => rows.reduce((m, r) => { if (r[key] != null) (m.get(r[key]) || m.set(r[key], []).get(r[key])).push(r); return m; }, new Map());
+  const ordersByUser = group(T.orders, "user_id"), ordersByStore = group(T.orders, "store_id"), ordersByProduct = group(T.orders, "product_id");
+  const productsByStore = group(T.products, "store_id"), refundsByOrder = group(T.refunds, "order_id");
+  const escByOrder = group(T.escalations, "order_id"), escByUser = group(T.escalations, "user_id");
+  const merchantOf = new Map(T.users.filter(u => u.role === "merchant").map(u => [u.store_id, u]));
+  const F = DATA.facts, ASOF = DATA.meta.world_asof;
+  document.getElementById("asof").textContent = ASOF;
+
+  // ---------- Helpers ----------
+  const money = c => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const st = v => `<span class="st ${esc(v)}">${esc(String(v).replace(/_/g, " "))}</span>`;
+  const yn = v => v ? '<span class="st yes">yes</span>' : '<span class="st">no</span>';
+  const link = (table, id, text) => `<a class="lnk" data-open="${table}:${esc(id)}">${esc(text)}</a>`;
+  const storeName = id => IDX.stores.get(id)?.name ?? `store ${id}`;
+  const userName = id => IDX.users.get(id)?.name ?? `user ${id}`;
+  const productTitle = id => { const t = IDX.products.get(id)?.title; return t === "" ? "(empty title)" : t ?? `product ${id}`; };
+  const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+  const addDays = (d, n) => new Date(Date.parse(d) + n * 86400000).toISOString().slice(0, 10);
+  const windowFor = storeId => IDX.stores.get(storeId)?.return_window_days_override ?? F.return_window_days;
+  const kv = pairs => `<dl class="kv">${pairs.filter(Boolean).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>`;
+  const opts = (vals, label) => [`<option value="">${label}</option>`, ...vals.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`)].join("");
+  const distinct = (rows, key) => [...new Set(rows.map(r => r[key]))].filter(v => v != null).sort().map(v => [v, String(v).replace(/_/g, " ")]);
+  const storeOpts = T.stores.map(s => [s.id, `${s.id} · ${s.name}`]);
+
+  // ---------- Views ----------
+  const VIEWS = {
+    orders: { label: "Orders", key: "id",
+      cols: [
+        { h: "Order", v: r => "#" + r.id, s: r => r.id, num: true },
+        { h: "Ordered", v: r => r.ordered_at, s: r => r.ordered_at },
+        { h: "Shopper", v: r => `${esc(userName(r.user_id))} <span class="hint">#${r.user_id}</span>`, s: r => r.user_id, html: true },
+        { h: "Store", v: r => storeName(r.store_id), s: r => r.store_id },
+        { h: "Product", v: r => productTitle(r.product_id), s: r => productTitle(r.product_id) },
+        { h: "Total", v: r => money(r.total_cents), s: r => r.total_cents, num: true },
+        { h: "Status", v: r => st(r.status), s: r => r.status, html: true },
+        { h: "Refundable", v: r => yn(r.refund_eligible), s: r => r.refund_eligible, html: true },
+      ],
+      filters: [["status", "Any status", distinct(T.orders, "status")], ["store_id", "Any store", storeOpts],
+        ["refund_eligible", "Refundable?", [[1, "Refundable"], [0, "Not refundable"]]]],
+      text: r => `${r.id} ${userName(r.user_id)} ${storeName(r.store_id)} ${productTitle(r.product_id)}`,
+      defaultSort: [1, -1] },
+    products: { label: "Products", key: "id",
+      cols: [
+        { h: "ID", v: r => r.id, s: r => r.id, num: true },
+        { h: "Title", v: r => r.title || "(empty)", s: r => r.title },
+        { h: "Store", v: r => storeName(r.store_id), s: r => r.store_id },
+        { h: "Category", v: r => r.category.replace(/_/g, " "), s: r => r.category },
+        { h: "Price", v: r => money(r.price_cents), s: r => r.price_cents, num: true },
+        { h: "Orders", v: r => (ordersByProduct.get(r.id) || []).length, s: r => (ordersByProduct.get(r.id) || []).length, num: true },
+      ],
+      filters: [["store_id", "Any store", storeOpts], ["category", "Any category", distinct(T.products, "category")]],
+      text: r => `${r.id} ${r.title} ${r.description} ${storeName(r.store_id)}` },
+    stores: { label: "Stores", key: "id",
+      cols: [
+        { h: "ID", v: r => r.id, s: r => r.id, num: true },
+        { h: "Name", v: r => r.name, s: r => r.name },
+        { h: "Category", v: r => r.category.replace(/_/g, " "), s: r => r.category },
+        { h: "Return window", v: r => r.return_window_days_override != null ? `<b>${r.return_window_days_override} days</b> <span class="hint">override</span>` : `${F.return_window_days} days`, s: r => windowFor(r.id), html: true },
+        { h: "Restocking fee", v: r => yn(r.restocking_fee_opt_in), s: r => r.restocking_fee_opt_in, html: true },
+        { h: "Merchant", v: r => { const m = merchantOf.get(r.id); return m ? `${m.name} #${m.id}` : "—"; }, s: r => merchantOf.get(r.id)?.id },
+        { h: "Orders", v: r => (ordersByStore.get(r.id) || []).length.toLocaleString(), s: r => (ordersByStore.get(r.id) || []).length, num: true },
+      ],
+      filters: [["category", "Any category", distinct(T.stores, "category")]],
+      text: r => `${r.id} ${r.name} ${r.slug} ${r.category}` },
+    users: { label: "Users", key: "id",
+      cols: [
+        { h: "ID", v: r => r.id, s: r => r.id, num: true },
+        { h: "Name", v: r => r.name, s: r => r.name },
+        { h: "Role", v: r => st(r.role), s: r => r.role, html: true },
+        { h: "Store", v: r => r.store_id ? storeName(r.store_id) : "—", s: r => r.store_id },
+        { h: "Orders", v: r => (ordersByUser.get(r.id) || []).length, s: r => (ordersByUser.get(r.id) || []).length, num: true },
+      ],
+      filters: [["role", "Any role", distinct(T.users, "role")]],
+      text: r => `${r.id} ${r.name} ${r.role}` },
+    refunds: { label: "Refunds", key: "id",
+      cols: [
+        { h: "ID", v: r => r.id, s: r => r.id, num: true },
+        { h: "Order", v: r => "#" + r.order_id, s: r => r.order_id, num: true },
+        { h: "Amount", v: r => money(r.amount_cents), s: r => r.amount_cents, num: true },
+        { h: "Status", v: r => st(r.status), s: r => r.status, html: true },
+        { h: "Reason", v: r => r.reason, s: r => r.reason, wrap: true },
+        { h: "Created", v: r => r.created_at, s: r => r.created_at },
+      ],
+      filters: [["status", "Any status", distinct(T.refunds, "status")]],
+      text: r => `${r.id} ${r.order_id} ${r.reason}` },
+    escalations: { label: "Escalations", key: "id",
+      cols: [
+        { h: "ID", v: r => r.id, s: r => r.id, num: true },
+        { h: "Summary", v: r => r.summary, s: r => r.summary, wrap: true },
+        { h: "User", v: r => `${userName(r.user_id)} #${r.user_id}`, s: r => r.user_id },
+        { h: "Order", v: r => r.order_id ? "#" + r.order_id : "—", s: r => r.order_id, num: true },
+        { h: "Store", v: r => r.store_id ? storeName(r.store_id) : "—", s: r => r.store_id },
+        { h: "Created", v: r => r.created_at, s: r => r.created_at },
+      ],
+      filters: [["summary", "Any summary", distinct(T.escalations, "summary")]],
+      text: r => `${r.id} ${r.summary} ${r.context} ${r.order_id}` },
+    policies: { label: "Policies", key: "id",
+      cols: [
+        { h: "Policy id", v: r => `<span class="mono">${esc(r.id)}</span>`, s: r => r.id, html: true },
+        { h: "Title", v: r => r.title, s: r => r.title, wrap: true },
+        { h: "Audience", v: r => r.audience, s: r => r.audience },
+      ],
+      filters: [], text: r => `${r.id} ${r.title} ${r.body}` },
+    data_quality_cases: { label: "Data quality", key: "case_id",
+      cols: [
+        { h: "Case", v: r => `<span class="mono">${esc(r.case_id)}</span>`, s: r => r.case_id, html: true },
+        { h: "Entity", v: r => `${r.entity_type} ${r.entity_id}`, s: r => r.entity_type },
+        { h: "Issue", v: r => r.issue_type.replace(/_/g, " "), s: r => r.issue_type },
+        { h: "Description", v: r => r.description, s: r => r.description, wrap: true },
+      ],
+      filters: [], text: r => `${r.case_id} ${r.description} ${r.expected_handling}` },
+  };
+  const ROWS = Object.fromEntries(Object.keys(VIEWS).map(k => [k, T[k]]));
+
+  // ---------- State ----------
+  const PAGE = 50;
+  let state = { view: "orders", q: "", filters: {}, only: null, sort: VIEWS.orders.defaultSort, page: 0 };
+  const $ = id => document.getElementById(id);
+
+  function setView(view, extra = {}) {
+    state = { view, q: "", filters: {}, only: null, sort: VIEWS[view].defaultSort || [0, 1], page: 0, ...extra };
+    $("q").value = state.q;
+    renderChrome(); render();
+  }
+
+  function renderChrome() {
+    $("subtabs").innerHTML = Object.entries(VIEWS).map(([k, v]) =>
+      `<button role="tab" data-view="${k}" aria-selected="${k === state.view}">${v.label}<span class="n">${ROWS[k].length.toLocaleString()}</span></button>`).join("");
+    const V = VIEWS[state.view];
+    $("filters").innerHTML = V.filters.map(([key, label, vals]) => `<select data-filter="${key}">${opts(vals, label)}</select>`).join("");
+    $("filters").querySelectorAll("select").forEach(sel => { sel.value = state.filters[sel.dataset.filter] ?? ""; });
+    $("grid").querySelector("thead").innerHTML = "<tr>" + V.cols.map((c, i) =>
+      `<th data-col="${i}" class="${c.num ? "num" : ""}" aria-sort="${state.sort[0] === i ? (state.sort[1] > 0 ? "ascending" : "descending") : "none"}">${c.h}</th>`).join("") + "</tr>";
+    $("only").hidden = !state.only;
+    if (state.only) $("only").innerHTML = `${esc(state.only.label)} <button type="button" title="Clear">✕</button>`;
+  }
+
+  function filtered() {
+    const V = VIEWS[state.view], q = state.q.trim().toLowerCase();
+    let rows = ROWS[state.view];
+    if (state.only) rows = rows.filter(r => state.only.ids.has(r[V.key]));
+    for (const [k, v] of Object.entries(state.filters)) if (v !== "") rows = rows.filter(r => String(r[k] === true ? 1 : r[k] === false ? 0 : r[k]) === v);
+    if (q) { const words = q.split(/\s+/); rows = rows.filter(r => { const t = V.text(r).toLowerCase(); return words.every(w => t.includes(w)); }); }
+    const [ci, dir] = state.sort, s = V.cols[ci].s;
+    return [...rows].sort((a, b) => { const x = s(a), y = s(b); return (x == null) - (y == null) || (x < y ? -dir : x > y ? dir : 0); });
+  }
+
+  function render() {
+    const V = VIEWS[state.view], rows = filtered(), pages = Math.max(1, Math.ceil(rows.length / PAGE));
+    state.page = Math.min(state.page, pages - 1);
+    const slice = rows.slice(state.page * PAGE, state.page * PAGE + PAGE);
+    $("grid").querySelector("tbody").innerHTML = slice.length ? slice.map(r =>
+      `<tr data-id="${esc(r[V.key])}">` + V.cols.map(c => { const v = c.v(r); return `<td class="${c.num ? "num" : ""} ${c.wrap ? "wrap" : ""}">${c.html ? v : esc(v ?? "")}</td>`; }).join("") + "</tr>").join("")
+      : `<tr><td class="empty" colspan="${V.cols.length}">No matching records.</td></tr>`;
+    $("count").textContent = `${rows.length.toLocaleString()} of ${ROWS[state.view].length.toLocaleString()} ${V.label.toLowerCase()}`;
+    $("page").textContent = `Page ${state.page + 1} of ${pages}`;
+    $("prev").disabled = state.page === 0; $("next").disabled = state.page >= pages - 1;
+  }
+
+  // ---------- Detail drawer ----------
+  const history = [];
+  function open(table, id, push = true) {
+    const rec = IDX[table].get(isNaN(id) ? id : Number(id)) ?? IDX[table].get(id);
+    if (!rec) return;
+    if (push) history.push([table, id]);
+    $("back").hidden = history.length < 2;
+    const [title, body] = DETAIL[table](rec);
+    $("drawer-title").textContent = title; $("drawer-body").innerHTML = body; $("drawer-body").scrollTop = 0;
+    $("drawer").hidden = false; $("scrim").hidden = false;
+  }
+  function closeDrawer() { history.length = 0; $("drawer").hidden = true; $("scrim").hidden = true; }
+  const orderLine = o => `<li>${link("orders", o.id, "#" + o.id)} · ${esc(productTitle(o.product_id))} · ${money(o.total_cents)} · ${st(o.status)} <span class="hint">${o.ordered_at}</span></li>`;
+  const listOf = (rows, fn, max = 25) => rows.length ? `<ul class="mini">${rows.slice(0, max).map(fn).join("")}${rows.length > max ? `<li class="hint">…and ${rows.length - max} more</li>` : ""}</ul>` : '<p class="hint">None.</p>';
+  const byNewest = rows => [...rows].sort((a, b) => (b.ordered_at > a.ordered_at) - (b.ordered_at < a.ordered_at) || b.id - a.id);
+
+  const DETAIL = {
+    orders: o => {
+      const p = IDX.products.get(o.product_id), s = IDX.stores.get(o.store_id), w = windowFor(o.store_id);
+      let windowNote = '<p class="note">Not delivered, so the return window has not started. Only delivered orders can be refunded.</p>';
+      if (o.delivered_at) {
+        const age = days(o.delivered_at, ASOF), deadline = addDays(o.delivered_at, w);
+        windowNote = o.status !== "delivered"
+          ? `<p class="note">Status is <b>${esc(o.status)}</b>, so it can't be refunded again.</p>`
+          : age <= w
+            ? `<p class="note good">Delivered ${age} days before ${ASOF}. Inside the ${w}-day window (last day ${deadline}), so refundable.</p>`
+            : `<p class="note bad">Delivered ${age} days before ${ASOF}. Past the ${w}-day window (ended ${deadline}), so not refundable.</p>`;
+      }
+      const approval = o.total_cents / 100 > F.refund_auto_approve_threshold_usd
+        ? `<p class="note bad">A full refund (${money(o.total_cents)}) is over the $${F.refund_auto_approve_threshold_usd} auto-approval limit, so issue_refund would queue it for a human.</p>`
+        : `<p class="note">A full refund (${money(o.total_cents)}) is within the $${F.refund_auto_approve_threshold_usd} limit and would be auto-approved if eligible.</p>`;
+      const m = merchantOf.get(o.store_id);
+      return [`Order #${o.id}`, `
+        <section>${kv([["Status", st(o.status)], ["Total", `${money(o.total_cents)} <span class="hint">(qty ${o.quantity})</span>`], ["Ordered", o.ordered_at],
+          ["Shipped", o.shipped_at ?? "—"], ["Delivered", o.delivered_at ?? "—"], ["Refundable flag", yn(o.refund_eligible)],
+          ["Cancellable", o.status === "placed" ? '<span class="st yes">yes, still placed</span>' : '<span class="st">no, already ' + esc(o.status) + "</span>"]])}</section>
+        <section><h4>Refund window</h4>${windowNote}${o.refund_eligible ? approval : ""}</section>
+        <section><h4>Product</h4>${p ? kv([["Title", link("products", p.id, p.title || "(empty title)")], ["Price", money(p.price_cents)], ["Category", esc(p.category)], ["Description", esc(p.description)]]) : '<p class="hint">Missing product.</p>'}</section>
+        <section><h4>Who can see this order</h4>${kv([["Shopper", link("users", o.user_id, `${userName(o.user_id)} #${o.user_id}`)],
+          ["Merchant", m ? link("users", m.id, `${m.name} #${m.id}`) + ` <span class="hint">store ${o.store_id}</span>` : "—"], ["Support", "any support user"],
+          ["Store", s ? link("stores", s.id, s.name) : "—"]])}<p class="hint">Any other shopper or merchant gets permission_denied.</p></section>
+        <section><h4>Refunds</h4>${listOf(refundsByOrder.get(o.id) || [], r => `<li>${link("refunds", r.id, "Refund " + r.id)} · ${money(r.amount_cents)} · ${st(r.status)} · ${esc(r.reason)}</li>`)}</section>
+        <section><h4>Escalations</h4>${listOf(escByOrder.get(o.id) || [], e => `<li>${link("escalations", e.id, "Ticket " + e.id)} · ${esc(e.summary)}</li>`)}</section>`];
+    },
+    products: p => [p.title || `Product ${p.id}`, `
+      <section>${kv([["ID", p.id], ["Store", link("stores", p.store_id, storeName(p.store_id))], ["Category", esc(p.category)], ["Price", money(p.price_cents)], ["Description", esc(p.description)]])}</section>
+      <section><h4>Orders of this product</h4>${listOf(byNewest(ordersByProduct.get(p.id) || []), orderLine)}</section>`],
+    stores: s => {
+      const m = merchantOf.get(s.id), pol = IDX.policies.get(`store-${s.slug}-policy`), ords = ordersByStore.get(s.id) || [];
+      return [s.name, `
+        <section>${kv([["ID", s.id], ["Slug", `<span class="mono">${esc(s.slug)}</span>`], ["Category", esc(s.category)],
+          ["Return window", s.return_window_days_override != null ? `<b>${s.return_window_days_override} days</b> (overrides the ${F.return_window_days}-day default)` : `${F.return_window_days} days (platform default)`],
+          ["Restocking fee", s.restocking_fee_opt_in ? `Opted in (up to ${F.restocking_fee_max_percent}%, opened items)` : "No"],
+          ["Merchant", m ? link("users", m.id, `${m.name} #${m.id}`) : "—"], ["Store policy", pol ? link("policies", pol.id, pol.id) : '<span class="hint">none, platform policies apply</span>'],
+          ["Products", (productsByStore.get(s.id) || []).length], ["Orders", ords.length.toLocaleString()]])}</section>
+        <section><h4>Newest orders</h4>${listOf(byNewest(ords), orderLine, 15)}</section>`];
+    },
+    users: u => {
+      const ords = u.role === "merchant" ? ordersByStore.get(u.store_id) || [] : ordersByUser.get(u.id) || [];
+      const cli = `uv run python -m agent.cli --role ${u.role} --user ${u.id}`;
+      return [`${u.name} (#${u.id})`, `
+        <section>${kv([["Role", st(u.role)], ["Store", u.store_id ? link("stores", u.store_id, storeName(u.store_id)) : "—"], ["Chat as this user", `<span class="mono">${esc(cli)}</span>`]])}</section>
+        <section><h4>${u.role === "merchant" ? "Store's orders (what list_my_orders returns, newest 20)" : u.role === "support" ? "Orders" : "Their orders (newest first)"}</h4>
+          ${u.role === "support" ? '<p class="hint">Support staff have no orders of their own and can look up any order.</p>' : listOf(byNewest(ords), orderLine, u.role === "merchant" ? 20 : 50)}</section>
+        <section><h4>Escalations they opened</h4>${listOf(escByUser.get(u.id) || [], e => `<li>${link("escalations", e.id, "Ticket " + e.id)} · ${esc(e.summary)}</li>`)}</section>`];
+    },
+    refunds: r => [`Refund ${r.id}`, `<section>${kv([["Order", link("orders", r.order_id, "#" + r.order_id)], ["Amount", money(r.amount_cents)], ["Status", st(r.status)], ["Reason", esc(r.reason)], ["Created", r.created_at]])}</section>`],
+    escalations: e => [`Ticket ${e.id}`, `<section>${kv([["Summary", esc(e.summary)], ["User", link("users", e.user_id, `${userName(e.user_id)} #${e.user_id}`)],
+      ["Order", e.order_id ? link("orders", e.order_id, "#" + e.order_id) : "—"], ["Store", e.store_id ? link("stores", e.store_id, storeName(e.store_id)) : "—"],
+      ["Created", e.created_at], ["Context", `<span class="mono">${esc(e.context)}</span>`]])}</section>`],
+    policies: p => [p.id, `<section>${kv([["Title", esc(p.title)], ["Audience", esc(p.audience)]])}</section><section><pre class="body">${esc(p.body)}</pre></section>`],
+    data_quality_cases: d => {
+      const table = { product: "products", order: "orders", store: "stores", user: "users" }[d.entity_type];
+      return [d.case_id, `<section>${kv([["Entity", table ? link(table, d.entity_id, `${d.entity_type} ${d.entity_id}`) : `${esc(d.entity_type)} ${d.entity_id}`],
+        ["Issue", esc(d.issue_type)], ["What's wrong", esc(d.description)], ["Agent should", esc(d.expected_handling)]])}</section>`];
+    },
+  };
+
+  // ---------- Homework shortcuts ----------
+  const ids = list => new Set(list);
+  const QUICK = [
+    ["Demo orders 4127 · 3980 · 4455", () => setView("orders", { only: { label: "Demo orders", ids: ids([4127, 3980, 4455]) } })],
+    ["Shopper 1's orders", () => setView("orders", { only: { label: "Shopper 1 (Imani Tran)", ids: ids((ordersByUser.get(1) || []).map(o => o.id)) } })],
+    ["Merchant 9002's store", () => open("stores", 2)],
+    ["Stores with policy overrides", () => setView("stores", { only: { label: "Stores with overrides", ids: ids(T.stores.filter(s => s.return_window_days_override != null || s.restocking_fee_opt_in).map(s => s.id)) } })],
+    ["Cancellable (still placed)", () => setView("orders", { filters: { status: "placed" } })],
+    ["Test users", () => setView("users", { only: { label: "Homework test users", ids: ids([1, 9002, 9501]) } })],
+  ];
+  $("quick").innerHTML = QUICK.map(([l], i) => `<button type="button" data-quick="${i}">${esc(l)}</button>`).join("");
+
+  // ---------- Events ----------
+  $("quick").addEventListener("click", e => { const b = e.target.closest("[data-quick]"); if (b) QUICK[b.dataset.quick][1](); });
+  $("subtabs").addEventListener("click", e => { const b = e.target.closest("[data-view]"); if (b) setView(b.dataset.view); });
+  $("filters").addEventListener("change", e => { state.filters[e.target.dataset.filter] = e.target.value; state.page = 0; render(); });
+  $("q").addEventListener("input", e => { state.q = e.target.value; state.page = 0; render(); });
+  $("only").addEventListener("click", e => { if (e.target.closest("button")) { state.only = null; renderChrome(); render(); } });
+  $("grid").querySelector("thead").addEventListener("click", e => {
+    const th = e.target.closest("th"); if (!th) return; const i = Number(th.dataset.col);
+    state.sort = [i, state.sort[0] === i ? -state.sort[1] : 1]; renderChrome(); render();
+  });
+  $("grid").querySelector("tbody").addEventListener("click", e => { const tr = e.target.closest("tr[data-id]"); if (tr) { history.length = 0; open(state.view, tr.dataset.id); } });
+  $("drawer-body").addEventListener("click", e => { const a = e.target.closest("[data-open]"); if (!a) return; const [t, id] = a.dataset.open.split(":"); open(t, id); });
+  $("back").addEventListener("click", () => { history.pop(); const [t, id] = history[history.length - 1]; open(t, id, false); });
+  $("close").addEventListener("click", closeDrawer); $("scrim").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+  $("prev").addEventListener("click", () => { state.page--; render(); });
+  $("next").addEventListener("click", () => { state.page++; render(); });
+
+  setView("orders");
+  try { const saved = localStorage.getItem("cw-tab"); if (TABS.includes(saved)) showTab(saved); } catch (e) {}
+})();
+</script>
+<script>
+(function () {
+  const root = document.getElementById("cmp");
+  const R = DATA && DATA.replay;
+  if (!R) {
+    root.innerHTML = '<h2>Model comparison</h2><p class="lede">No replay yet. Run <span class="mono">uv run python -m scripts.replay_conversations</span>, then <span class="mono">uv run python explorer/build.py</span>.</p>';
+    return;
+  }
+
+  // ---------- Data ----------
+  const ORDER = ["gpt-4o-mini", "gpt-5-nano", "claude-haiku-4-5", "claude-haiku-5-5", "gemini-4-argon", "claude-opus-5-5", "gpt-6-astra"];
+  const rank = m => (ORDER.indexOf(m) + 1) || 99;
+  const MODELS = [...new Set(R.turns.map(t => t.model))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  const VARS = ["tools", "sql"], VLABEL = { tools: "Course agent", sql: "SQL agent" };
+  const CONVS = R.conversations;
+  const median = xs => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+  const sum = xs => xs.reduce((a, b) => a + b, 0);
+  const money = v => v == null ? "n/a" : v >= 1 ? `$${v.toFixed(2)}` : v >= 0.01 ? `$${v.toFixed(3)}` : `$${v.toFixed(4)}`;
+  const secs = ms => `${(ms / 1000).toFixed(1)}s`;
+  const turnsOf = (m, v) => R.turns.filter(t => t.model === m && t.variant === v);
+
+  const COMBOS = MODELS.flatMap(m => VARS.map(v => {
+    const all = turnsOf(m, v);
+    if (!all.length) return null;
+    // Speed, size, and cost come from completed messages; a rate-limited
+    // failure returns instantly and would look fast and cheap.
+    const ts = all.filter(t => t.status === "ok");
+    if (!ts.length) return { m, v, n: all.length, errors: all.length, costTotal: null, costPerMsg: null, latencyMed: 0,
+      latencyP95: 0, tokens: 0, toolCalls: 0, fails: 0, failRate: 0, writes: 0 };
+    const toolCalls = sum(ts.map(t => t.tool_calls)), fails = sum(ts.map(t => t.tool_failures));
+    const costs = ts.map(t => t.cost_usd).filter(c => c != null);
+    return {
+      m, v, n: all.length,
+      errors: all.length - ts.length,
+      costTotal: costs.length ? sum(costs) : null,
+      costPerMsg: costs.length ? mean(costs) : null,
+      latencyMed: median(ts.map(t => t.latency_ms)),
+      latencyP95: (() => { const s = ts.map(t => t.latency_ms).sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.round(0.95 * (s.length - 1)))]; })(),
+      tokens: mean(ts.map(t => t.total_tokens)),
+      toolCalls: toolCalls / ts.length,
+      fails, failRate: toolCalls ? fails / toolCalls : 0,
+      writes: sum(ts.map(t => (t.actions || []).filter(a => a.ok).length)),
+    };
+  })).filter(Boolean);
+  const combo = (m, v) => COMBOS.find(c => c.m === m && c.v === v);
+
+
+  // ---------- Headline card: SQL agent vs course agent, matched on model ----------
+  // Lab logos: OpenAI from LobeHub Icons, Anthropic and Google from Simple Icons (both open source).
+  const LAB_ICONS = {"openai": ["M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z"], "anthropic": ["M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z"], "google": ["M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"]};
+  const labOf = m => m.startsWith("gpt") ? "openai" : m.startsWith("claude") ? "anthropic" : m.startsWith("gemini") ? "google" : null;
+  const LAB_NAME = { openai: "OpenAI", anthropic: "Anthropic", google: "Google" };
+  const labIcon = m => { const lab = labOf(m); return lab ? `<svg class="lab-icon" viewBox="0 0 24 24" role="img" aria-label="${LAB_NAME[lab]}"><title>${LAB_NAME[lab]}</title>${LAB_ICONS[lab].map(d => `<path d="${d}" fill-rule="evenodd"/>`).join("")}</svg>` : ""; };
+
+  function headlineCard() {
+    const H = R.headline;
+    if (!H || !H.models) return "";
+    const M = H.metrics;
+    const p = r => Math.abs(Math.round((r - 1) * 100));
+    const sign = r => p(r) === 0 ? "≈0%" : `${r >= 1 ? "+" : "−"}${p(r)}%`;
+    const SPECS = [
+      { key: "tokens", title: "Tokens", fmt: v => v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${Math.round(v)}`,
+        phrase: r => p(r) === 0 ? "use about the same tokens" : r >= 1 ? `use ${p(r)}% more tokens` : `use ${p(r)}% fewer tokens`,
+        label: r => p(r) === 0 ? "same tokens per answer" : r >= 1 ? "more tokens per answer" : "fewer tokens per answer", pic: "squares" },
+      { key: "time", title: "Wait time", fmt: v => `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}s`,
+        phrase: r => p(r) === 0 ? "take about the same time" : r >= 1 ? `take ${p(r)}% longer` : `come back ${p(r)}% faster`,
+        label: r => p(r) === 0 ? "same wait per answer" : r >= 1 ? "longer wait per answer" : "shorter wait per answer", pic: "bars" },
+      { key: "cost", title: "Cost", fmt: v => v >= 0.01 ? `$${v.toFixed(2)}` : v >= 0.001 ? `$${v.toFixed(3)}` : `$${v.toFixed(4)}`,
+        tick: v => v >= 1 ? `$${v.toFixed(0)}` : `${+(v * 100).toPrecision(1)}¢`,
+        phrase: r => p(r) === 0 ? "cost about the same" : r >= 1 ? `cost ${p(r)}% more` : `cost ${p(r)}% less`,
+        label: r => p(r) === 0 ? "same cost per answer" : r >= 1 ? "more cost per answer" : "less cost per answer", pic: "coins" },
+    ];
+    const phrases = SPECS.map(s => s.phrase(M[s.key].ratio));
+    const title = `Letting the AI write its own database queries makes each answer ${phrases[0]}, ${phrases[1]}, and ${phrases[2]}.`;
+
+    // A small picture of the change: 10 units for simple tools vs 10 × ratio for SQL.
+    const picture = s => {
+      const r = M[s.key].ratio;
+      if (s.pic === "bars") {
+        const base = 100 / Math.max(r, 1);
+        return `<div class="pic-bars"><div class="pic-bar course" style="width:${base}%"></div><div class="pic-bar sql" style="width:${Math.min(100, base * r)}%"></div></div>`;
+      }
+      const n = Math.max(1, Math.round(10 * r)), shape = s.pic === "coins" ? "coin" : "sq";
+      const row = (k, cls) => `<div class="pic-row">${Array.from({ length: k }, () => `<i class="${shape} ${cls}"></i>`).join("")}</div>`;
+      return `<div class="pic-units">${row(10, "course")}${row(n, "sql")}</div>`;
+    };
+    const stat = s => {
+      const m = M[s.key];
+      return `<div class="hl-stat m-${s.key}" title="95% range ${sign(m.low)} to ${sign(m.high)}; higher on ${m.models_higher} of ${H.models} models">
+        <div class="big">${sign(m.ratio)}</div><div class="what">${s.label(m.ratio)}</div>
+        ${picture(s)}</div>`;
+    };
+
+    // Dumbbell per model on a log scale, so cheap and expensive models share one axis.
+    const order = MODELS.filter(m => M.tokens.per_model.some(r => r.model === m));
+    const dumbbell = s => {
+      const rows = M[s.key].per_model;
+      const vals = rows.flatMap(r => [r.tools, r.sql]).filter(v => v > 0);
+      const lo = Math.floor(Math.log10(Math.min(...vals))), hi = Math.ceil(Math.log10(Math.max(...vals)));
+      const span = Math.max(hi - lo, 1), x = v => ((Math.log10(v) - lo) / span) * 100;
+      const body = order.map(model => {
+        const r = rows.find(q => q.model === model); if (!r) return "";
+        const a = x(r.tools), b = x(r.sql), left = Math.min(a, b), width = Math.abs(b - a);
+        const tip = `<b>${esc(model)}</b>Simple tools: ${s.fmt(r.tools)}<br>AI writes queries: ${s.fmt(r.sql)}<br>${sign(r.ratio)} · ${r.pairs} questions`;
+        return `<div class="db-row" data-tip="${esc(tip)}"><div class="lab">${labIcon(model)}<span>${esc(model)}</span></div>
+          <div class="db-track" style="--grid:${100 / span}%"><div class="db-line" style="left:${left}%;width:${width}%"></div>
+            <div class="db-dot course" style="left:${a}%"></div><div class="db-dot sql" style="left:${b}%"></div></div>
+          <div class="db-delta ${r.ratio < 1 ? "down" : ""}">${sign(r.ratio)}</div></div>`;
+      }).join("");
+      const ticks = Array.from({ length: span + 1 }, (_, i) => `<span style="left:${(i / span) * 100}%">${(s.tick || s.fmt)(10 ** (lo + i))}</span>`).join("");
+      return `<div class="db m-${s.key}"><h4>${s.title}</h4>${body}<div class="db-axis"><div></div><div class="tk">${ticks}</div><div></div></div></div>`;
+    };
+
+    return `<div class="hl-card" id="headline">
+      <h2 class="hl-title">${esc(title)}</h2>
+      <div class="hl-legend m-neutral"><span><span class="dot course"></span>Simple tools</span><span><span class="dot sql"></span>AI writes its own queries</span></div>
+      <div class="hl-stats">${SPECS.map(stat).join("")}</div>
+      <div class="hl-charts">${SPECS.map(dumbbell).join("")}</div>
+      <div class="hl-foot"><span>Same ${H.models} AI models answering the same ${fmt(H.pairs)} questions both ways</span></div>
+    </div>`;
+  }
+
+
+  // ---------- Matched answers (both agents answered the same question) ----------
+  const answered = new Map(R.turns.filter(t => t.status === "ok" && (t.output || "").trim())
+    .map(t => [`${t.model}|${t.variant}|${t.conversation}|${t.turn_index}`, t]));
+  function matchedPairs(model) {
+    const rows = [];
+    answered.forEach((t, key) => {
+      const [m, v, c, i] = key.split("|");
+      if (m === model && v === "tools") { const s = answered.get(`${m}|sql|${c}|${i}`); if (s) rows.push([t, s]); }
+    });
+    return rows;
+  }
+  const avgOf = (rows, side, f) => rows.length ? rows.reduce((a, r) => a + f(r[side]), 0) / rows.length : 0;
+  const kfmt = v => v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${Math.round(v)}`;
+  const AGENT_DOT = { tools: '<span class="dot course"></span>', sql: '<span class="dot sql"></span>' };
+  const AGENT_NAME = { tools: "Simple tools", sql: "AI writes queries" };
+
+  // ---------- Where the tokens go: cached input, full-price input, output ----------
+  function tokenMixCard() {
+    const order = MODELS.filter(m => matchedPairs(m).length);
+    if (!order.length) return "";
+    const parts = m => { const rows = matchedPairs(m); return [0, 1].map(side => ({
+      cached: avgOf(rows, side, t => t.cached_tokens || 0),
+      input: avgOf(rows, side, t => Math.max(0, (t.input_tokens || 0) - (t.cached_tokens || 0))),
+      output: avgOf(rows, side, t => t.output_tokens || 0),
+      cost: avgOf(rows, side, t => t.cost_usd || 0) })); };
+    const all = Object.fromEntries(order.map(m => [m, parts(m)]));
+    const max = Math.max(...order.flatMap(m => all[m].map(x => x.cached + x.input + x.output)));
+    const rows = order.map(m => ["tools", "sql"].map((v, side) => {
+      const x = all[m][side], total = x.cached + x.input + x.output;
+      const tip = `<b>${esc(m)} · ${AGENT_NAME[v]}</b>Average per answer<br>Cached input: ${kfmt(x.cached)}<br>Full-price input: ${kfmt(x.input)}<br>Output: ${kfmt(x.output)}<br>Cost: ${money(x.cost)}`;
+      const seg = (cls, n) => n > 0 ? `<div class="sw-${cls}" style="flex:${n}"></div>` : "";
+      return `<div class="srow"><div class="lab">${side ? "" : `${labIcon(m)}<span>${esc(m)}</span>`}</div><div class="slab m-neutral">${AGENT_DOT[v]}</div>
+        <div class="strack" style="width:${(total / max * 100).toFixed(2)}%" data-tip="${esc(tip)}">${seg("cached", x.cached)}${seg("input", x.input)}${seg("output", x.output)}</div>
+        <div class="sval">${kfmt(total)}</div></div>`;
+    }).join("")).join('<div class="sgap"></div>');
+    return `<div class="hl-card mix">
+      <h3 class="card-title">Where the tokens go</h3>
+      <p class="card-sub">Average tokens per answer. Darker costs more: cached input is about a tenth of the normal price, and output costs 4 to 5 times more than input.</p>
+      <div class="hl-legend m-neutral"><span><span class="swatch sq sw-cached"></span>Cached input (cheapest)</span><span><span class="swatch sq sw-input"></span>Input</span><span><span class="swatch sq sw-output"></span>Output (priciest)</span><span><span class="dot course"></span>Simple tools</span><span><span class="dot sql"></span>AI writes queries</span></div>
+      ${rows}</div>`;
+  }
+
+  // ---------- Cost vs wait time, one arrow per model ----------
+  function costTimeCard() {
+    const order = MODELS.filter(m => matchedPairs(m).length);
+    if (!order.length) return "";
+    const pts = order.map(m => { const rows = matchedPairs(m); return { m,
+      tools: { t: avgOf(rows, 0, x => x.latency_ms) / 1000, c: avgOf(rows, 0, x => x.cost_usd || 0) },
+      sql: { t: avgOf(rows, 1, x => x.latency_ms) / 1000, c: avgOf(rows, 1, x => x.cost_usd || 0) } }; });
+    const W = 720, Hh = 400, L = 64, Rm = 150, T = 16, B = 46;
+    const ts = pts.flatMap(p => [p.tools.t, p.sql.t]), cs = pts.flatMap(p => [p.tools.c, p.sql.c]).filter(v => v > 0);
+    const tlo = Math.floor(Math.log10(Math.min(...ts))), thi = Math.ceil(Math.log10(Math.max(...ts)));
+    const clo = Math.floor(Math.log10(Math.min(...cs))), chi = Math.ceil(Math.log10(Math.max(...cs)));
+    const X = v => L + (Math.log10(v) - tlo) / Math.max(thi - tlo, 1) * (W - L - Rm);
+    const Y = v => T + (1 - (Math.log10(v) - clo) / Math.max(chi - clo, 1)) * (Hh - T - B);
+    const cents = v => v >= 1 ? `$${v.toFixed(0)}` : `${+(v * 100).toPrecision(1)}¢`;
+    let grid = "", axis = "";
+    for (let e = tlo; e <= thi; e++) { const x = X(10 ** e); grid += `<line x1="${x}" x2="${x}" y1="${T}" y2="${Hh - B}"/>`; axis += `<text x="${x}" y="${Hh - B + 16}" text-anchor="middle">${10 ** e >= 1 ? 10 ** e : (10 ** e).toPrecision(1)}s</text>`; }
+    for (let e = clo; e <= chi; e++) { const y = Y(10 ** e); grid += `<line x1="${L}" x2="${W - Rm}" y1="${y}" y2="${y}"/>`; axis += `<text x="${L - 8}" y="${y + 4}" text-anchor="end">${cents(10 ** e)}</text>`; }
+    // Labels sit right of the SQL point; nudge down when two would overlap.
+    const placed = [];
+    const marks = pts.map(p => {
+      const x1 = X(p.tools.t), y1 = Y(p.tools.c), x2 = X(p.sql.t), y2 = Y(p.sql.c);
+      let ly = (x2 >= x1 ? y2 : y1) + 4; const lx = Math.max(x1, x2) + 12, w = p.m.length * 6.6 + 18;
+      while (placed.some(q => Math.abs(q.y - ly) < 15 && lx < q.x + q.w && q.x < lx + w)) ly += 15;
+      placed.push({ x: lx, y: ly, w });
+      const len = Math.hypot(x2 - x1, y2 - y1), ux = len ? (x2 - x1) / len : 0, uy = len ? (y2 - y1) / len : 0;
+      const ex = x2 - ux * 7, ey = y2 - uy * 7;
+      const tip = (side, v) => `<b>${esc(p.m)} · ${AGENT_NAME[side]}</b>Wait: ${v.t.toFixed(1)}s<br>Cost: ${money(v.c)} per answer`;
+      const lab = labOf(p.m);
+      return `<g>
+        ${len > 8 ? `<path class="link" d="M${x1},${y1} L${ex},${ey}" marker-end="url(#arrow)"/>` : ""}
+        <circle class="pt-course" cx="${x1}" cy="${y1}" r="5.5" data-tip="${esc(tip("tools", p.tools))}"/>
+        <circle class="pt-sql" cx="${x2}" cy="${y2}" r="6" data-tip="${esc(tip("sql", p.sql))}"/>
+        ${lab ? `<svg class="lbl-icon" x="${lx}" y="${ly - 10}" width="12" height="12" viewBox="0 0 24 24">${LAB_ICONS[lab].map(d => `<path d="${d}" fill-rule="evenodd"/>`).join("")}</svg>` : ""}
+        <text class="lbl" x="${lx + (lab ? 16 : 0)}" y="${ly}">${esc(p.m)}</text></g>`;
+    }).join("");
+    return `<div class="hl-card">
+      <h3 class="card-title">Cost and wait time, by model</h3>
+      <p class="card-sub">Average per answer. Each arrow goes from simple tools to the AI writing its own queries. Lower and further left is better.</p>
+      <div class="hl-legend m-neutral"><span><span class="dot course"></span>Simple tools</span><span><span class="dot sql"></span>AI writes queries</span></div>
+      <svg class="scatter" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Cost versus wait time for each model, simple tools vs AI writes queries">
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+        <g class="grid">${grid}</g><g class="axis">${axis}</g>
+        <text class="axis-title" x="${(L + W - Rm) / 2}" y="${Hh - 6}" text-anchor="middle">Wait time per answer (log scale)</text>
+        <text class="axis-title" x="14" y="${(T + Hh - B) / 2}" text-anchor="middle" transform="rotate(-90 14 ${(T + Hh - B) / 2})">Cost per answer (log scale)</text>
+        ${marks}
+      </svg></div>`;
+  }
+
+  // ---------- Layout ----------
+  const totalCost = sum(COMBOS.map(c => c.costTotal || 0));
+  const totalTurns = R.turns.length, totalErrors = sum(COMBOS.map(c => c.errors));
+  const reliable = c => c.errors / c.n < 0.5;
+  const cheapest = [...COMBOS].filter(c => c.costPerMsg != null && reliable(c)).sort((a, b) => a.costPerMsg - b.costPerMsg)[0];
+  const fastest = [...COMBOS].filter(c => c.latencyMed > 0 && reliable(c)).sort((a, b) => a.latencyMed - b.latencyMed)[0];
+  const msgs = sum(CONVS.map(c => c.messages.length));
+  const name = c => `${c.m} · ${VLABEL[c.v]}`;
+  // Each agent has its own prompt, so versions are compared within an agent:
+  // a model whose messages used a version that few others used ran on a
+  // revised prompt, and its numbers are not like-for-like.
+  const revised = (() => {
+    const out = new Set();
+    VARS.forEach(v => {
+      const counts = {};
+      R.turns.filter(t => t.variant === v && t.status !== "empty").forEach(t => { counts[t.prompt_version] = (counts[t.prompt_version] || 0) + 1; });
+      const top = Math.max(0, ...Object.values(counts));
+      R.turns.filter(t => t.variant === v && t.status !== "empty" && counts[t.prompt_version] < top).forEach(t => out.add(t.model));
+    });
+    return out;
+  })();
+  function promptNote() {
+    if (!revised.size) return "";
+    const odd = MODELS.filter(m => revised.has(m));
+    return `<div class="note" style="margin:0 0 14px">ⓘ <b>${odd.map(esc).join(", ")}</b> ran with a revised system prompt: the line "You MUST explain your reasoning in plain text before every tool call" was removed, because it made Anthropic's content filter block every Opus 5.5 reply. The other models ran with the original prompt, so compare ${odd.length === 1 ? "that model" : "those models"} with that in mind. Marked † in the table.</div>`;
+  }
+  function failureNote() {
+    const empty = R.turns.filter(t => t.status === "empty"), errored = R.turns.filter(t => t.status !== "ok" && t.status !== "empty");
+    if (!empty.length && !errored.length) return "";
+    const byCombo = list => Object.entries(list.reduce((a, t) => ((a[`${t.model} · ${VLABEL[t.variant]}`] = (a[`${t.model} · ${VLABEL[t.variant]}`] || 0) + 1), a), {}))
+      .map(([k, n]) => `${esc(k)} (${n})`).join(", ");
+    const parts = [];
+    if (empty.length) parts.push(`<b>✕ ${empty.length} message${empty.length === 1 ? "" : "s"} got no reply:</b> ${byCombo(empty)}. The run finished but the model returned no text. This happens when a provider's content filter stops the reply.`);
+    if (errored.length) parts.push(`<b>✕ ${errored.length} message${errored.length === 1 ? "" : "s"} ended in an error:</b> ${byCombo(errored)} (API failure, timeout, or the 12-step limit).`);
+    return `<div class="note bad" style="margin:0 0 14px; display:grid; gap:6px">${parts.map(p => `<div>${p}</div>`).join("")}<div>Charts use answered messages only. Failures are counted in the table and marked in the grid.</div></div>`;
+  }
+
+  root.innerHTML = `
+    ${headlineCard()}
+    ${tokenMixCard()}
+    ${costTimeCard()}
+    <h2>Breakdown</h2>
+    <p class="lede">${CONVS.length} conversations (${msgs} messages): ${CONVS.filter(c => !String(c.source_session_id).startsWith("scripted")).length} you recorded in the chat and ${CONVS.filter(c => String(c.source_session_id).startsWith("scripted")).length} scripted to cover more situations, replayed through ${MODELS.length} models with both agents. Every conversation started from freshly seeded data, so results are comparable. Replay <span class="mono">${esc(R.replay_id)}</span>.</p>
+    <div class="cmp-legend"><span><span class="swatch tools"></span>Course agent (small tools)</span><span><span class="swatch sql"></span>SQL agent (read_sql + write_sql)</span></div>
+    <div class="tiles">
+      <div class="tile"><div class="k">Messages replayed</div><div class="v">${fmt(totalTurns)}</div><div class="s">${COMBOS.length} model × agent combinations</div></div>
+      <div class="tile"><div class="k">Total cost</div><div class="v">${money(totalCost)}</div><div class="s">at list prices</div></div>
+      <div class="tile"><div class="k">Cheapest per message</div><div class="v">${money(cheapest && cheapest.costPerMsg)}</div><div class="s">${cheapest ? esc(name(cheapest)) : ""}</div></div>
+      <div class="tile"><div class="k">Fastest (median)</div><div class="v">${secs(fastest.latencyMed)}</div><div class="s">${esc(name(fastest))}</div></div>
+    </div>
+    ${promptNote()}
+    ${failureNote()}
+    <div class="charts" id="charts"></div>
+    <h3 class="cmp-h3">All numbers</h3>
+    <p class="hint" style="margin:0 0 8px">Per message unless noted. Tool failures are tool calls that returned an error, such as a bad SQL query or a permission denial.</p>
+    <div class="table-wrap" id="summary"></div>
+    <h3 class="cmp-h3">What each combination did</h3>
+    <p class="hint" style="margin:0 0 8px">One row per conversation. Each cell lists the changes the agent made and anything that went wrong. Click a cell to read that conversation below.</p>
+    <div class="grid-wrap" id="behave"></div>
+    <h3 class="cmp-h3" id="reader-h">Read the conversations</h3>
+    <div class="filters-row" id="reader-filters"></div>
+    <div id="reader"></div>`;
+
+  // ---------- Bar charts (one measure each, shared model order) ----------
+  const tip = document.getElementById("tip");
+  function showTip(html, e) {
+    tip.innerHTML = html; tip.hidden = false;
+    const r = tip.getBoundingClientRect();
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - r.width - 8) + "px";
+    tip.style.top = Math.min(e.clientY + 14, innerHeight - r.height - 8) + "px";
+  }
+  document.addEventListener("mousemove", e => {
+    const el = e.target.closest && e.target.closest("[data-tip]");
+    if (el) showTip(el.dataset.tip, e); else tip.hidden = true;
+  });
+
+  const CHARTS = [
+    { title: "Cost per message", sub: "Average, log scale: each gridline is 10× the one before.", get: c => c.costPerMsg, fmt: money, log: true },
+    { title: "Response time", sub: "Median seconds per message, including every model and tool call.", get: c => c.latencyMed / 1000, fmt: v => `${v.toFixed(1)}s` },
+    { title: "Tokens per message", sub: "Average input + output tokens across all model calls.", get: c => c.tokens, fmt: v => fmt(Math.round(v)) },
+  ];
+  function chart(spec) {
+    const vals = COMBOS.map(spec.get).filter(v => v != null && v > 0);
+    let pos, ticks;
+    if (spec.log) {
+      const lo = Math.floor(Math.log10(Math.min(...vals))), hi = Math.ceil(Math.log10(Math.max(...vals)));
+      const span = Math.max(hi - lo, 1);
+      pos = v => v > 0 ? Math.max(0.01, (Math.log10(v) - lo) / span) : 0;
+      ticks = Array.from({ length: span + 1 }, (_, i) => [i / span, spec.fmt(10 ** (lo + i))]);
+    } else {
+      const max = spec.pctMax ? Math.max(10, ...vals) : Math.max(...vals, 0) || 1;
+      pos = v => (v || 0) / max;
+      ticks = [0, 0.5, 1].map(f => [f, spec.fmt(max * f)]);
+    }
+    const rows = MODELS.map(m => `<div class="brow"><div class="lab" title="${esc(m)}">${esc(m)}</div><div class="track">${
+      VARS.map(v => { const c = combo(m, v); if (!c) return ""; const val = spec.get(c);
+        const tipHtml = `<b>${esc(m)} · ${VLABEL[v]}</b>${spec.title}: ${val == null ? "n/a" : spec.fmt(val)}<br>${c.n} messages · ${c.errors} failed · ${c.fails} failed tool calls`;
+        return `<div class="bar ${v}" style="width:${(pos(val) * 100).toFixed(2)}%" data-tip="${esc(tipHtml)}" aria-label="${esc(`${m}, ${VLABEL[v]}: ${val == null ? "n/a" : spec.fmt(val)}`)}"></div>`; }).join("")
+    }</div></div>`).join("");
+    const tickRow = `<div class="ticks"><div></div><div class="tk">${ticks.map(([f, t]) => `<span style="left:${f * 100}%">${t}</span>`).join("")}</div></div>`;
+    return `<div class="chart"><h4>${spec.title}</h4><div class="sub">${spec.sub}</div>${rows}${tickRow}</div>`;
+  }
+
+  // ---------- Stacked charts: one row per model × agent ----------
+  // Tool calls from messages that crashed (API errors, timeouts) are left out.
+  const BLOCKED = new Set(["permission_denied", "not_eligible", "unsupported_statement", "paused"]);
+  const turnKey = x => `${x.model}|${x.variant}|${x.conversation}|${x.turn_index}`;
+  const okTurns = new Set(R.turns.filter(t => t.status === "ok").map(turnKey));
+  const callsOf = (m, v) => R.tool_calls.filter(c => c.model === m && c.variant === v && okTurns.has(turnKey(c)));
+  const AGENT_SHORT = { tools: "Tools", sql: "SQL" };
+  function comboRows(render) {
+    return MODELS.map(m => VARS.filter(v => combo(m, v)).map((v, k) =>
+      `<div class="srow"><div class="lab" title="${esc(m)}">${k ? "" : esc(m)}</div><div class="slab"><span class="vdot ${v}"></span> ${AGENT_SHORT[v]}</div>${render(m, v)}</div>`
+    ).join("")).join('<div class="sgap"></div>');
+  }
+  const codeList = list => Object.entries(list.reduce((a, c) => ((a[c.error] = (a[c.error] || 0) + 1), a), {}))
+    .map(([code, n]) => `${code.replace(/_/g, " ")} ×${n}`).join(", ");
+
+  function outcomesChart() {
+    const rows = comboRows((m, v) => {
+      const cs = callsOf(m, v), n = cs.length;
+      if (!n) return '<div class="strack empty">no tool calls</div><div class="sval hint">—</div>';
+      const blocked = cs.filter(c => !c.ok && BLOCKED.has(c.error)), bad = cs.filter(c => !c.ok && !BLOCKED.has(c.error));
+      const ok = n - blocked.length - bad.length;
+      const tipHtml = `<b>${esc(m)} · ${VLABEL[v]}</b>${n} tool calls<br>Bad call: ${bad.length}${bad.length ? ` (${esc(codeList(bad))})` : ""}` +
+        `<br>Blocked by a rule: ${blocked.length}${blocked.length ? ` (${esc(codeList(blocked))})` : ""}<br>Succeeded: ${ok}`;
+      const seg = (cls, k) => k ? `<div class="sw-${cls}" style="flex:${k}"></div>` : "";
+      const failed = n - ok;
+      return `<div class="strack" data-tip="${esc(tipHtml)}" aria-label="${esc(`${m}, ${VLABEL[v]}: ${bad.length} bad, ${blocked.length} blocked, ${ok} succeeded of ${n}`)}">` +
+        `${seg("bad", bad.length)}${seg("blocked", blocked.length)}${seg("ok", ok)}</div>` +
+        `<div class="sval">${failed ? `${Math.round(failed / n * 100)}% failed` : "none failed"} <span class="hint">of ${n}</span></div>`;
+    });
+    return `<div class="chart wide"><h4>Tool call outcomes</h4>
+      <div class="sub">Every tool call, as 100% of each combination's calls. "Blocked by a rule" is the code doing its job (for example permission_denied when a merchant asks about another store's order). "Bad call" is the agent's mistake: a broken query, a wrong argument, or an id that doesn't exist.</div>
+      <div class="cmp-legend"><span><span class="swatch sw-bad"></span>Bad call</span><span><span class="swatch sw-blocked"></span>Blocked by a rule</span><span><span class="swatch sw-ok"></span>Succeeded</span></div>
+      ${rows}</div>`;
+  }
+
+  function timeChart() {
+    const split = (m, v) => {
+      const ts = turnsOf(m, v).filter(t => t.status === "ok");
+      return { model: mean(ts.map(t => t.llm_latency_ms || 0)) / 1000, tools: mean(ts.map(t => t.tool_latency_ms || 0)) / 1000 };
+    };
+    const max = Math.max(...COMBOS.map(c => { const s = split(c.m, c.v); return s.model + s.tools; }), 0.1);
+    const rows = comboRows((m, v) => {
+      const s = split(m, v), total = s.model + s.tools;
+      const tipHtml = `<b>${esc(m)} · ${VLABEL[v]}</b>Average per completed message<br>Model: ${s.model.toFixed(1)}s<br>Tools: ${s.tools.toFixed(2)}s`;
+      return `<div class="strack" style="width:${(total / max * 100).toFixed(2)}%" data-tip="${esc(tipHtml)}" aria-label="${esc(`${m}, ${VLABEL[v]}: model ${s.model.toFixed(1)}s, tools ${s.tools.toFixed(2)}s`)}">` +
+        `<div class="sw-model ${v}" style="flex:${s.model}"></div>${s.tools >= 0.005 ? `<div class="sw-tool ${v}" style="flex:${s.tools}"></div>` : ""}</div>` +
+        `<div class="sval">${total.toFixed(1)}s <span class="hint">${s.tools >= 0.05 ? `· tools ${s.tools.toFixed(1)}s` : "· tools ~0s"}</span></div>`;
+    });
+    return `<div class="chart wide"><h4>Where the time goes</h4>
+      <div class="sub">Average seconds per completed message, split into waiting on the model and running tools (database queries and checks). The tools part is usually tiny: speed is almost all model time.</div>
+      <div class="cmp-legend"><span><span class="swatch tools"></span><span class="swatch sql"></span>Model time (solid)</span><span><span class="swatch sw-tool tools"></span><span class="swatch sw-tool sql"></span>Tool time (lighter shade)</span><span>Row colors follow the agent.</span></div>
+      ${rows}</div>`;
+  }
+
+  document.getElementById("charts").innerHTML = CHARTS.map(chart).join("") + outcomesChart() + timeChart();
+
+  // ---------- Summary table ----------
+  document.getElementById("summary").innerHTML = `<table><thead><tr>
+      <th>Model</th><th>Agent</th><th class="num">Messages</th><th class="num" title="No reply or error">Failed</th><th class="num">Median</th><th class="num">p95</th>
+      <th class="num">Tokens</th><th class="num">Tool calls</th><th class="num">Tool fail</th><th class="num">Changes made</th><th class="num">Cost / msg</th><th class="num">Total cost</th>
+    </tr></thead><tbody>${COMBOS.map(c => `<tr>
+      <td>${esc(c.m)}${revised.has(c.m) ? ' <span class="hint" title="Ran with the revised system prompt">†</span>' : ""}</td><td><span class="vdot ${c.v}"></span> ${VLABEL[c.v]}</td><td class="num">${c.n}</td>
+      <td class="num">${c.errors ? `<span class="tag err">✕ ${c.errors}</span>` : "0"}</td>
+      <td class="num">${secs(c.latencyMed)}</td><td class="num">${secs(c.latencyP95)}</td><td class="num">${fmt(Math.round(c.tokens))}</td>
+      <td class="num">${c.toolCalls.toFixed(1)}</td><td class="num">${(c.failRate * 100).toFixed(0)}%</td><td class="num">${c.writes}</td>
+      <td class="num">${money(c.costPerMsg)}</td><td class="num">${money(c.costTotal)}</td></tr>`).join("")}</tbody></table>`;
+  document.querySelectorAll("#summary tbody tr").forEach(tr => { tr.style.cursor = "default"; });
+
+  // ---------- Behavior grid ----------
+  const ACTION_LABEL = { issue_refund: "refund", cancel_order: "cancel", escalate: "escalation", escalate_to_human: "escalation", write_sql: "write" };
+  function cellTags(turns) {
+    const tags = [];
+    const errors = turns.filter(t => t.status !== "ok");
+    const empties = turns.filter(t => t.status === "empty");
+    if (empties.length) tags.push(`<span class="tag err">✕ no reply${empties.length > 1 ? ` ×${empties.length}` : ""}</span>`);
+    const hard = errors.filter(t => t.status !== "empty");
+    if (hard.length) tags.push(`<span class="tag err" title="${esc(hard.map(e => e.error).join("\n"))}">✕ error</span>`);
+    turns.flatMap(t => t.actions || []).forEach(a => {
+      const what = ACTION_LABEL[a.action] || a.action;
+      tags.push(a.ok ? `<span class="tag act">${esc(what)}: ${esc(String(a.outcome || "done").replace(/_/g, " "))}</span>`
+                     : `<span class="tag">${esc(what)} refused: ${esc(String(a.outcome).replace(/_/g, " "))}</span>`);
+    });
+    const fails = sum(turns.map(t => t.tool_failures));
+    if (fails) tags.push(`<span class="tag warn">⚠ ${fails} failed call${fails === 1 ? "" : "s"}</span>`);
+    if (!tags.length) tags.push('<span class="tag">no changes</span>');
+    return tags.join("");
+  }
+  const convTurns = (i, m, v) => R.turns.filter(t => t.conversation === i && t.model === m && t.variant === v);
+  const origTurns = i => R.originals.filter(t => t.conversation === i);
+  document.getElementById("behave").innerHTML = `<table class="behave"><thead>
+      <tr><th rowspan="2">Conversation</th><th class="grp" rowspan="2">Your chat</th>${MODELS.map(m => `<th class="grp" colspan="2">${esc(m)}</th>`).join("")}</tr>
+      <tr>${MODELS.map(() => VARS.map((v, i) => `<th class="${i ? "" : "first"}"><span class="vdot ${v}"></span> ${v === "tools" ? "Tools" : "SQL"}</th>`).join("")).join("")}</tr>
+    </thead><tbody>${CONVS.map((c, i) => `<tr>
+      <td class="q"><b>#${i + 1}</b> <span class="hint">${esc(c.role)} ${c.user_id}</span><br>${esc(c.messages[0].slice(0, 90))}${c.messages[0].length > 90 ? "…" : ""}${c.messages.length > 1 ? ` <span class="hint">+${c.messages.length - 1} more</span>` : ""}</td>
+      <td class="first"><div class="cell" data-open="${i}|orig">${cellTags(origTurns(i))}</div></td>
+      ${MODELS.map(m => VARS.map((v, k) => { const ts = convTurns(i, m, v);
+        return `<td class="${k ? "" : "first"}">${ts.length ? `<div class="cell" data-open="${i}|${esc(m)}|${v}">${cellTags(ts)}</div>` : '<span class="hint">—</span>'}</td>`; }).join("")).join("")}
+    </tr>`).join("")}</tbody></table>`;
+
+  // ---------- Conversation reader ----------
+  const state = { conv: 0, variants: new Set(VARS), models: new Set(MODELS), highlight: null };
+  const callsFor = (list, i, m, v, t) => list.filter(c => c.conversation === i && c.turn_index === t && (m == null || (c.model === m && c.variant === v)));
+  function card(t, calls, opts) {
+    if (!t) return "";
+    const meta = [
+      `<span class="tag">${secs(t.latency_ms)}</span>`,
+      `<span class="tag">${money(t.cost_usd)}</span>`,
+      `<span class="tag">${fmt(t.total_tokens)} tok</span>`,
+      `<span class="tag">${t.tool_calls} tool call${t.tool_calls === 1 ? "" : "s"}</span>`,
+      t.tool_failures ? `<span class="tag warn">⚠ ${t.tool_failures} failed</span>` : "",
+      t.status !== "ok" ? `<span class="tag err">✕ ${t.status === "empty" ? "no reply" : esc(t.status)}</span>` : "",
+      ...(t.actions || []).map(a => `<span class="tag ${a.ok ? "act" : ""}">${esc(ACTION_LABEL[a.action] || a.action)}: ${esc(String(a.outcome || "").replace(/_/g, " "))}</span>`),
+    ].join("");
+    const body = t.status === "empty" ? '<span class="hint">The model returned no text.</span>'
+      : t.status !== "ok" ? `<span class="hint">${esc(t.error || "no reply")}</span>` : esc(t.output || "");
+    const toolList = calls.length ? `<details><summary>${calls.length} tool call${calls.length === 1 ? "" : "s"}</summary>${calls.map(c =>
+      `<div><b class="mono">${esc(c.tool)}</b> ${c.ok ? "" : `<span class="tag warn">⚠ ${esc(c.error)}</span>`}<pre>${esc(JSON.stringify(c.arguments))}</pre><pre>${esc(c.result)}</pre></div>`).join("")}</details>` : "";
+    return `<div class="rc ${opts.orig ? "orig" : ""} ${opts.hl ? "hl" : ""}">
+      <div class="rc-head">${opts.title}</div><div class="rc-meta">${meta}</div>
+      <div class="rc-body">${body}</div><button type="button" class="more" hidden>Show all</button>${toolList}</div>`;
+  }
+  function renderFilters() {
+    document.getElementById("reader-filters").innerHTML =
+      `<select id="conv-pick" aria-label="Conversation">${CONVS.map((c, i) => `<option value="${i}" ${i === state.conv ? "selected" : ""}>#${i + 1} · ${esc(c.role)} ${c.user_id} · ${esc(c.messages[0].slice(0, 60))}</option>`).join("")}</select>` +
+      VARS.map(v => `<button type="button" class="chipbtn" data-var="${v}" aria-pressed="${state.variants.has(v)}"><span class="vdot ${v}"></span> ${VLABEL[v]}</button>`).join("") +
+      MODELS.map(m => `<button type="button" class="chipbtn" data-model="${esc(m)}" aria-pressed="${state.models.has(m)}">${esc(m)}</button>`).join("");
+  }
+  function renderReader() {
+    const i = state.conv, conv = CONVS[i];
+    document.getElementById("reader").innerHTML = conv.messages.map((msg, t) => {
+      const orig = R.originals.find(o => o.conversation === i && o.turn_index === t);
+      const cards = [card(orig, callsFor(R.original_tool_calls, i, null, null, t), { orig: true, title: `Your chat <span class="hint">gpt-4o-mini · Course agent</span>` })];
+      MODELS.filter(m => state.models.has(m)).forEach(m => VARS.filter(v => state.variants.has(v)).forEach(v => {
+        const turn = R.turns.find(x => x.conversation === i && x.turn_index === t && x.model === m && x.variant === v);
+        const hl = state.highlight && state.highlight[0] === m && state.highlight[1] === v;
+        cards.push(card(turn, callsFor(R.tool_calls, i, m, v, t), { hl, title: `<span class="vdot ${v}"></span> ${esc(m)} <span class="hint">${VLABEL[v]}</span>` }));
+      }));
+      return `<div class="turn-block"><div class="user-msg"><span class="hint">${esc(conv.role)} ${conv.user_id} · message ${t + 1}</span>${esc(msg)}</div><div class="cards">${cards.join("")}</div></div>`;
+    }).join("");
+    document.querySelectorAll("#reader .rc").forEach(rc => {
+      const body = rc.querySelector(".rc-body"), more = rc.querySelector(".more");
+      if (body.scrollHeight > body.clientHeight + 4) { more.hidden = false; more.addEventListener("click", () => { body.classList.toggle("open"); more.textContent = body.classList.contains("open") ? "Show less" : "Show all"; }); }
+    });
+  }
+  const filters = document.getElementById("reader-filters");
+  filters.addEventListener("change", e => { if (e.target.id === "conv-pick") { state.conv = Number(e.target.value); state.highlight = null; renderReader(); } });
+  filters.addEventListener("click", e => {
+    const b = e.target.closest(".chipbtn"); if (!b) return;
+    const set = b.dataset.var ? state.variants : state.models, key = b.dataset.var || b.dataset.model;
+    if (set.has(key) && set.size > 1) set.delete(key); else set.add(key);
+    renderFilters(); renderReader();
+  });
+  document.getElementById("behave").addEventListener("click", e => {
+    const cell = e.target.closest("[data-open]"); if (!cell) return;
+    const [i, m, v] = cell.dataset.open.split("|");
+    state.conv = Number(i); state.highlight = m === "orig" ? null : [m, v];
+    renderFilters(); renderReader();
+    document.getElementById("reader-h").scrollIntoView({ behavior: "smooth" });
+  });
+  renderFilters(); renderReader();
+})();
+</script>
+</body>
+</html>
